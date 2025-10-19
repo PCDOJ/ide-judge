@@ -31,11 +31,11 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - TZ=${TZ:-Asia/Ho_Chi_Minh}
-      - DB_HOST=${DB_HOST}
-      - DB_USER=${DB_USER}
+      - DB_HOST=${DB_HOST:-mariadb}
+      - DB_USER=${DB_USER:-root}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
-      - DB_PORT=${DB_PORT}
+      - DB_PORT=${DB_PORT:-3306}
       - JUDGE0_API_URL=${JUDGE0_API_URL:-http://judge0-server:2358}
       - SESSION_SECRET=${SESSION_SECRET}
       - PORT=2308

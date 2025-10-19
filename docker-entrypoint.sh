@@ -9,21 +9,35 @@ echo ""
 # Function to wait for MariaDB
 wait_for_mariadb() {
     echo "Waiting for MariaDB to be ready..."
-    max_attempts=30
+    echo "  DB_HOST: ${DB_HOST}"
+    echo "  DB_USER: ${DB_USER}"
+    echo "  DB_NAME: ${DB_NAME}"
+
+    max_attempts=60
     attempt=0
-    
+
     while [ $attempt -lt $max_attempts ]; do
-        if mysql -h mariadb -u root -p${MYSQL_ROOT_PASSWORD} -e "SELECT 1" > /dev/null 2>&1; then
+        # Try to connect using DB_PASSWORD from environment
+        if mysql -h "${DB_HOST}" -u "${DB_USER}" -p"${DB_PASSWORD}" -e "SELECT 1" > /dev/null 2>&1; then
             echo "✓ MariaDB is ready!"
             return 0
         fi
-        
+
         attempt=$((attempt + 1))
         echo "  Attempt $attempt/$max_attempts - MariaDB not ready yet..."
-        sleep 2
+
+        # Show more detailed error on every 10th attempt
+        if [ $((attempt % 10)) -eq 0 ]; then
+            echo "  Debug: Trying to connect to ${DB_HOST} as ${DB_USER}..."
+            mysql -h "${DB_HOST}" -u "${DB_USER}" -p"${DB_PASSWORD}" -e "SELECT 1" 2>&1 | head -n 3 || true
+        fi
+
+        sleep 3
     done
-    
+
     echo "❌ MariaDB failed to start after $max_attempts attempts"
+    echo "Last error:"
+    mysql -h "${DB_HOST}" -u "${DB_USER}" -p"${DB_PASSWORD}" -e "SELECT 1" 2>&1 || true
     exit 1
 }
 
@@ -35,24 +49,24 @@ run_migrations() {
     # Check each migration individually
 
     # 1. Check and run exam tables migration
-    exam_check=$(mysql -h mariadb -u root -p${MYSQL_ROOT_PASSWORD} ${MYSQL_DATABASE} \
+    exam_check=$(mysql -h "${DB_HOST}" -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" \
         -e "SHOW TABLES;" 2>/dev/null | grep -c "exams" || echo "0")
 
     if [ "$exam_check" = "0" ]; then
         echo "  1. Creating exam tables..."
-        mysql -h mariadb -u root -p${MYSQL_ROOT_PASSWORD} ${MYSQL_DATABASE} < /app/migrations/add_exam_tables.sql
+        mysql -h "${DB_HOST}" -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" < /app/migrations/add_exam_tables.sql
         echo "  ✓ Exam tables created"
     else
         echo "  ✓ Exam tables already exist"
     fi
 
     # 2. Check and run code submissions migration
-    submission_check=$(mysql -h mariadb -u root -p${MYSQL_ROOT_PASSWORD} ${MYSQL_DATABASE} \
+    submission_check=$(mysql -h "${DB_HOST}" -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" \
         -e "SHOW TABLES;" 2>/dev/null | grep -c "code_submissions" || echo "0")
 
     if [ "$submission_check" = "0" ]; then
         echo "  2. Creating code submission tables..."
-        mysql -h mariadb -u root -p${MYSQL_ROOT_PASSWORD} ${MYSQL_DATABASE} < /app/migrations/add_code_submissions.sql
+        mysql -h "${DB_HOST}" -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" < /app/migrations/add_code_submissions.sql
         echo "  ✓ Code submission tables created"
     else
         echo "  ✓ Code submission tables already exist"
@@ -60,12 +74,12 @@ run_migrations() {
 
     # 3. Check and run access code field migration
     if [ -f "/app/migrations/add_has_access_code_field.sql" ]; then
-        access_code_check=$(mysql -h mariadb -u root -p${MYSQL_ROOT_PASSWORD} ${MYSQL_DATABASE} \
+        access_code_check=$(mysql -h "${DB_HOST}" -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" \
             -e "SHOW COLUMNS FROM exams LIKE 'has_access_code';" 2>/dev/null | grep -c "has_access_code" || echo "0")
 
         if [ "$access_code_check" = "0" ]; then
             echo "  3. Adding access code field..."
-            mysql -h mariadb -u root -p${MYSQL_ROOT_PASSWORD} ${MYSQL_DATABASE} < /app/migrations/add_has_access_code_field.sql || true
+            mysql -h "${DB_HOST}" -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" < /app/migrations/add_has_access_code_field.sql || true
             echo "  ✓ Access code field added"
         else
             echo "  ✓ Access code field already exists"
