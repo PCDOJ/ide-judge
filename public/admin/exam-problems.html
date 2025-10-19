@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý Bài thi - Admin Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.8);
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            margin: 0.25rem 0;
+            transition: all 0.3s;
+        }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-2 sidebar p-3">
+                <div class="text-center mb-4">
+                    <h4 class="text-white"><i class="bi bi-shield-check"></i> Admin Panel</h4>
+                </div>
+                <div class="mt-4">
+                    <nav class="nav flex-column">
+                        <a class="nav-link" href="/admin/index.html">
+                            <i class="bi bi-speedometer2"></i> Dashboard
+                        </a>
+                        <a class="nav-link" href="/admin/users.html">
+                            <i class="bi bi-people"></i> Quản lý người dùng
+                        </a>
+                        <a class="nav-link active" href="/admin/exams.html">
+                            <i class="bi bi-journal-text"></i> Quản lý kỳ thi
+                        </a>
+                        <a class="nav-link" href="/index.html">
+                            <i class="bi bi-house"></i> Về trang chủ
+                        </a>
+                        <hr class="text-white">
+                        <a class="nav-link" href="#" id="logoutBtn">
+                            <i class="bi bi-box-arrow-right"></i> Đăng xuất
+                        </a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-10 p-4">
+                <div class="mb-3">
+                    <a href="/admin/exams.html" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Quay lại danh sách kỳ thi
+                    </a>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h2 id="examTitle"><i class="bi bi-journal-text"></i> Quản lý Bài thi</h2>
+                        <p class="text-muted mb-0" id="examInfo"></p>
+                    </div>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addProblemModal">
+                        <i class="bi bi-plus-circle"></i> Thêm bài thi
+                    </button>
+                </div>
+
+                <!-- Alert -->
+                <div id="alertContainer"></div>
+
+                <!-- Problems Table -->
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>STT</th>
+                                        <th>Mã bài</th>
+                                        <th>Tiêu đề</th>
+                                        <th>Điểm</th>
+                                        <th>File PDF</th>
+                                        <th>Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="problemsTableBody">
+                                    <tr>
+                                        <td colspan="6" class="text-center">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="visually-hidden">Loading...</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Problem Modal -->
+    <div class="modal fade" id="addProblemModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Thêm bài thi</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addProblemForm">
+                        <div class="mb-3">
+                            <label for="newProblemCode" class="form-label">Mã bài</label>
+                            <input type="text" class="form-control" id="newProblemCode" required placeholder="VD: P1, A, B1">
+                        </div>
+                        <div class="mb-3">
+                            <label for="newProblemTitle" class="form-label">Tiêu đề bài</label>
+                            <input type="text" class="form-control" id="newProblemTitle" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="newProblemPoints" class="form-label">Điểm</label>
+                            <input type="number" step="0.01" class="form-control" id="newProblemPoints" required value="0">
+                        </div>
+                        <div class="mb-3">
+                            <label for="newProblemOrder" class="form-label">Thứ tự hiển thị</label>
+                            <input type="number" class="form-control" id="newProblemOrder" required value="0">
+                        </div>
+                        <div class="mb-3">
+                            <label for="newProblemPDF" class="form-label">File PDF</label>
+                            <input type="file" class="form-control" id="newProblemPDF" accept=".pdf" required>
+                            <small class="text-muted">Chỉ chấp nhận file PDF, tối đa 10MB</small>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-primary" onclick="addProblem()">Thêm bài</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Problem Modal -->
+    <div class="modal fade" id="editProblemModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Chỉnh sửa bài thi</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editProblemForm">
+                        <input type="hidden" id="editProblemId">
+                        <div class="mb-3">
+                            <label for="editProblemCode" class="form-label">Mã bài</label>
+                            <input type="text" class="form-control" id="editProblemCode" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editProblemTitle" class="form-label">Tiêu đề bài</label>
+                            <input type="text" class="form-control" id="editProblemTitle" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editProblemPoints" class="form-label">Điểm</label>
+                            <input type="number" step="0.01" class="form-control" id="editProblemPoints" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editProblemOrder" class="form-label">Thứ tự hiển thị</label>
+                            <input type="number" class="form-control" id="editProblemOrder" required>
+                        </div>
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> Không thể thay đổi file PDF. Nếu cần thay đổi, vui lòng xóa và tạo lại bài thi.
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-primary" onclick="updateProblem()">Cập nhật</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/admin-exam-problems.js"></script>
+</body>
+</html>
+
