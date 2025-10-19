@@ -132,6 +132,28 @@ docker-compose ps
 
 **⚠️ Lưu ý**: Đổi password ngay sau khi đăng nhập lần đầu trong môi trường production!
 
+### 🔧 Quản lý User qua Command Line
+
+Nếu không thể login qua web, sử dụng script `manage.py` để quản lý users trực tiếp:
+
+```bash
+# Cách 1: Sử dụng script wrapper (tự động cài dependencies)
+./manage-users.sh
+
+# Cách 2: Chạy trực tiếp
+pip3 install -r requirements-manage.txt
+python3 manage.py
+```
+
+**Tính năng:**
+- ✅ Tạo user/admin mới
+- ✅ Liệt kê tất cả users
+- ✅ Đổi password
+- ✅ Đổi vai trò (user ↔ admin)
+- ✅ Xóa user
+
+📖 Xem hướng dẫn chi tiết: [MANAGE_USERS.md](MANAGE_USERS.md)
+
 ## 📱 Các trang trong ứng dụng
 
 ### Public Pages (Không cần đăng nhập)
