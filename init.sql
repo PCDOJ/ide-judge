@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- Insert default admin user (password: admin123)
 -- Password hash generated with bcrypt for 'admin123'
 INSERT INTO users (fullname, username, email, password, role)
-VALUES ('Administrator', 'admin', 'admin@example.com', '$2a$10$rKvXqKGKqKqKOXxJxJxJxOXxJxJxJxJxJxJxJxJxJxJxJxJxJxJxJ', 'admin')
+VALUES ('Administrator', 'admin', 'admin@example.com', '$2a$10$mBCmkEgliZQPjaHrWKDrk.tHcKLinI78IGhh8KvBMNycgh1bgotB2', 'admin')
 ON DUPLICATE KEY UPDATE username=username;
 
 -- Create index for faster queries
