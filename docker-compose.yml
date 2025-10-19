@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  mariadb:
+    image: mariadb:latest
+    container_name: ide-judge-mariadb
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: ide_judge_db
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "3307:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - ide-judge-network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    container_name: ide-judge-web
+    restart: always
+    ports:
+      - "2308:2308"
+    environment:
+      - NODE_ENV=production
+      - TZ=Asia/Ho_Chi_Minh
+      - MYSQL_ROOT_PASSWORD=rootpassword
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - ide-judge-network
+
+networks:
+  ide-judge-network:
+    driver: bridge
+
+volumes:
+  mariadb_data:
+
