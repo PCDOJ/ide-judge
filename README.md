@@ -109,9 +109,10 @@ npm install
 # Build và start containers
 docker-compose up -d --build
 
-# Chạy migrations
-docker-compose exec -T mariadb mysql -uroot -prootpassword ide_judge_db < migrations/add_exam_tables.sql
-docker-compose exec -T mariadb mysql -uroot -prootpassword ide_judge_db < migrations/add_code_submissions.sql
+# Chạy migrations (tự động chạy khi start, hoặc chạy thủ công)
+# Lưu ý: Thay YOUR_PASSWORD bằng password trong file .env
+docker-compose exec -T mariadb mysql -uroot -pYOUR_PASSWORD ide_judge_db < migrations/add_exam_tables.sql
+docker-compose exec -T mariadb mysql -uroot -pYOUR_PASSWORD ide_judge_db < migrations/add_code_submissions.sql
 
 # Kiểm tra containers
 docker-compose ps
@@ -229,7 +230,7 @@ docker-compose exec mariadb bash
 
 # Truy cập MariaDB
 docker-compose exec mariadb mysql -u root -p
-# Password: rootpassword
+# Password: Nhập password từ file .env (DB_PASSWORD)
 ```
 
 ## 🔐 Bảo mật

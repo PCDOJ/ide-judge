@@ -54,7 +54,8 @@ echo "Checking service health..."
 echo ""
 
 # Check MariaDB
-if docker-compose exec -T mariadb mysql -uroot -prootpassword -e "SELECT 1" > /dev/null 2>&1; then
+# Note: Password is loaded from .env file in docker-compose
+if docker-compose exec -T mariadb mysql -uroot -p"${DB_PASSWORD}" -e "SELECT 1" > /dev/null 2>&1; then
     echo "✓ MariaDB is ready"
 else
     echo "⚠ MariaDB is not ready yet"

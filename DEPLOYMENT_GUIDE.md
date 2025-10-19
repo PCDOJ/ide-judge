@@ -71,10 +71,11 @@ Migrations sẽ tự động chạy khi khởi động container, nhưng bạn c
 
 ```bash
 # Chạy migration cho exam tables
-docker-compose exec mariadb mysql -uroot -prootpassword ide_judge_db < migrations/add_exam_tables.sql
+# Lưu ý: Thay YOUR_PASSWORD bằng password trong file .env
+docker-compose exec mariadb mysql -uroot -pYOUR_PASSWORD ide_judge_db < migrations/add_exam_tables.sql
 
 # Chạy migration cho code submissions
-docker-compose exec mariadb mysql -uroot -prootpassword ide_judge_db < migrations/add_code_submissions.sql
+docker-compose exec mariadb mysql -uroot -pYOUR_PASSWORD ide_judge_db < migrations/add_code_submissions.sql
 ```
 
 ### 4. Khởi động hệ thống
@@ -218,7 +219,8 @@ docker-compose logs mariadb
 docker-compose restart mariadb
 
 # Kiểm tra kết nối
-docker-compose exec mariadb mysql -uroot -prootpassword -e "SHOW DATABASES;"
+# Lưu ý: Thay YOUR_PASSWORD bằng password trong file .env
+docker-compose exec mariadb mysql -uroot -pYOUR_PASSWORD -e "SHOW DATABASES;"
 ```
 
 ### 3. Code không lưu được
@@ -245,7 +247,8 @@ docker-compose up -d
 
 ```bash
 # Backup MariaDB
-docker-compose exec mariadb mysqldump -uroot -prootpassword ide_judge_db > backup.sql
+# Lưu ý: Thay YOUR_PASSWORD bằng password trong file .env
+docker-compose exec mariadb mysqldump -uroot -pYOUR_PASSWORD ide_judge_db > backup.sql
 
 # Backup Judge0 PostgreSQL
 docker-compose exec judge0-db pg_dump -U judge0 judge0 > judge0_backup.sql
@@ -255,7 +258,8 @@ docker-compose exec judge0-db pg_dump -U judge0 judge0 > judge0_backup.sql
 
 ```bash
 # Restore MariaDB
-docker-compose exec -T mariadb mysql -uroot -prootpassword ide_judge_db < backup.sql
+# Lưu ý: Thay YOUR_PASSWORD bằng password trong file .env
+docker-compose exec -T mariadb mysql -uroot -pYOUR_PASSWORD ide_judge_db < backup.sql
 
 # Restore Judge0 PostgreSQL
 docker-compose exec -T judge0-db psql -U judge0 judge0 < judge0_backup.sql

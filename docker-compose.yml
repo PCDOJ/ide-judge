@@ -6,8 +6,8 @@ services:
     container_name: ide-judge-mariadb
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: ide_judge_db
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
       TZ: Asia/Ho_Chi_Minh
     ports:
       - "2310:3306"
@@ -27,14 +27,18 @@ services:
     container_name: ide-judge-web
     restart: always
     ports:
-      - "2308:2308"
+      - "${PORT:-2308}:2308"
     environment:
-      - NODE_ENV=production
-      - TZ=Asia/Ho_Chi_Minh
-      - MYSQL_ROOT_PASSWORD=rootpassword
-      - MYSQL_DATABASE=ide_judge_db
-      - JUDGE0_API_URL=http://judge0-server:2358
-      - SESSION_SECRET=${SESSION_SECRET:-your-secret-key-change-this}
+      - NODE_ENV=${NODE_ENV:-production}
+      - TZ=${TZ:-Asia/Ho_Chi_Minh}
+      - DB_HOST=${DB_HOST}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - DB_PORT=${DB_PORT}
+      - JUDGE0_API_URL=${JUDGE0_API_URL:-http://judge0-server:2358}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - PORT=2308
     depends_on:
       mariadb:
         condition: service_healthy
@@ -66,9 +70,9 @@ services:
       - REDIS_PORT=6379
       - POSTGRES_HOST=judge0-db
       - POSTGRES_PORT=5432
-      - POSTGRES_DB=judge0
-      - POSTGRES_USER=judge0
-      - POSTGRES_PASSWORD=YourPasswordHere
+      - POSTGRES_DB=${POSTGRES_DB:-judge0}
+      - POSTGRES_USER=${POSTGRES_USER:-judge0}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     depends_on:
       - judge0-db
       - judge0-redis
@@ -80,9 +84,9 @@ services:
     container_name: ide-judge-judge0-db
     restart: always
     environment:
-      - POSTGRES_DB=judge0
-      - POSTGRES_USER=judge0
-      - POSTGRES_PASSWORD=YourPasswordHere
+      - POSTGRES_DB=${POSTGRES_DB:-judge0}
+      - POSTGRES_USER=${POSTGRES_USER:-judge0}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - judge0-db-data:/var/lib/postgresql/data
     networks:
