@@ -32,12 +32,74 @@ services:
       - NODE_ENV=production
       - TZ=Asia/Ho_Chi_Minh
       - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=ide_judge_db
+      - JUDGE0_API_URL=http://judge0-server:2358
+      - SESSION_SECRET=${SESSION_SECRET:-your-secret-key-change-this}
     depends_on:
       mariadb:
         condition: service_healthy
+      judge0-db:
+        condition: service_healthy
+      judge0-redis:
+        condition: service_started
     volumes:
       - .:/app
       - /app/node_modules
+    networks:
+      - ide-judge-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:2308/login.html"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  judge0-server:
+    image: judge0/judge0:1.13.0
+    container_name: ide-judge-judge0-server
+    restart: always
+    ports:
+      - "2358:2358"
+    privileged: true
+    environment:
+      - REDIS_HOST=judge0-redis
+      - REDIS_PORT=6379
+      - POSTGRES_HOST=judge0-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=YourPasswordHere
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    networks:
+      - ide-judge-network
+
+  judge0-db:
+    image: postgres:13
+    container_name: ide-judge-judge0-db
+    restart: always
+    environment:
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=YourPasswordHere
+    volumes:
+      - judge0-db-data:/var/lib/postgresql/data
+    networks:
+      - ide-judge-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U judge0"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  judge0-redis:
+    image: redis:6
+    container_name: ide-judge-judge0-redis
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - judge0-redis-data:/data
     networks:
       - ide-judge-network
 
@@ -47,4 +109,6 @@ networks:
 
 volumes:
   mariadb_data:
+  judge0-db-data:
+  judge0-redis-data:
 

@@ -98,7 +98,7 @@ function renderProblemsList() {
     
     container.innerHTML = currentExam.problems.map((problem, index) => `
         <div class="col-md-6 col-lg-4">
-            <div class="card problem-card" onclick="viewProblem(${problem.id}, '${problem.problem_title}')">
+            <div class="card problem-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start mb-2">
                         <h5 class="card-title mb-0">
@@ -110,9 +110,16 @@ function renderProblemsList() {
                     <small class="text-muted">Thứ tự: ${index + 1}</small>
                 </div>
                 <div class="card-footer bg-white">
-                    <button class="btn btn-sm btn-primary w-100">
-                        <i class="bi bi-eye"></i> Xem đề
-                    </button>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-sm btn-primary" onclick="viewProblem(${problem.id}, '${problem.problem_title}')">
+                            <i class="bi bi-eye"></i> Xem đề
+                        </button>
+                        ${currentExam.status === 'ongoing' ? `
+                        <button class="btn btn-sm btn-success" onclick="codeProblem(${problem.id})">
+                            <i class="bi bi-code-slash"></i> Code bài này
+                        </button>
+                        ` : ''}
+                    </div>
                 </div>
             </div>
         </div>
@@ -135,6 +142,11 @@ function backToProblems() {
     document.getElementById('pdfViewerView').style.display = 'none';
     document.getElementById('problemsListView').style.display = 'block';
     document.getElementById('pdfViewer').src = '';
+}
+
+// Code problem - open code editor
+function codeProblem(problemId) {
+    window.location.href = `/exam-code.html?examId=${examId}&problemId=${problemId}`;
 }
 
 // Leave exam

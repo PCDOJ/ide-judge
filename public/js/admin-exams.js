@@ -114,6 +114,9 @@ function renderExamsTable() {
                     <button class="btn btn-sm btn-info" onclick="viewRegistrations(${exam.id}, '${exam.title}')">
                         <i class="bi bi-people"></i> Đăng ký
                     </button>
+                    <button class="btn btn-sm btn-warning" onclick="window.location.href='/admin/exam-submissions.html?id=${exam.id}'">
+                        <i class="bi bi-code-square"></i> Bài làm
+                    </button>
                     <button class="btn btn-sm btn-outline-primary" onclick="openEditModal(${exam.id})">
                         <i class="bi bi-pencil"></i>
                     </button>
