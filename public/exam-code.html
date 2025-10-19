@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Editor - IDE Judge</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        /* Toast Notification */
+        .toast-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 9999;
+        }
+
+        .toast-notification {
+            min-width: 300px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .toast-notification.success {
+            border-left: 4px solid #28a745;
+        }
+
+        .toast-notification.error {
+            border-left: 4px solid #dc3545;
+        }
+
+        .toast-notification.info {
+            border-left: 4px solid #17a2b8;
+        }
+
+        .toast-icon {
+            font-size: 24px;
+        }
+
+        .toast-notification.success .toast-icon {
+            color: #28a745;
+        }
+
+        .toast-notification.error .toast-icon {
+            color: #dc3545;
+        }
+
+        .toast-notification.info .toast-icon {
+            color: #17a2b8;
+        }
+
+        .toast-content {
+            flex: 1;
+        }
+
+        .toast-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .toast-message {
+            font-size: 14px;
+            color: #666;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+
+        .toast-notification.hiding {
+            animation: slideOut 0.3s ease-out forwards;
+        }
+
+        .top-bar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .top-bar h5 {
+            margin: 0;
+            font-size: 1rem;
+        }
+        .top-bar .btn {
+            margin-left: 0.5rem;
+        }
+        .split-container {
+            display: flex;
+            height: calc(100vh - 60px);
+        }
+        .pdf-panel {
+            width: 50%;
+            border-right: 2px solid #dee2e6;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .pdf-panel.hidden {
+            width: 0;
+            border-right: none;
+        }
+        .pdf-viewer {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .ide-panel {
+            width: 50%;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .ide-panel.fullscreen {
+            width: 100%;
+        }
+        .ide-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .status-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #f8f9fa;
+            padding: 0.5rem 1rem;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.875rem;
+            z-index: 1000;
+        }
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .timer {
+            font-weight: bold;
+            color: #dc3545;
+        }
+        .resize-handle {
+            width: 5px;
+            cursor: col-resize;
+            background: #dee2e6;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        .resize-handle:hover {
+            background: #667eea;
+        }
+        .resize-handle.hidden {
+            width: 0;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <div>
+            <h5 id="problemTitle"><i class="bi bi-code-square"></i> Loading...</h5>
+        </div>
+        <div>
+            <span class="timer" id="timer">--:--:--</span>
+            <button class="btn btn-sm btn-info" onclick="togglePDF()" id="togglePdfBtn" title="Hiện/Ẩn đề bài">
+                <i class="bi bi-file-earmark-pdf"></i> Đề bài
+            </button>
+            <button class="btn btn-sm btn-light" onclick="backToProblems()">
+                <i class="bi bi-arrow-left"></i> Quay lại
+            </button>
+            <button class="btn btn-sm btn-warning" onclick="saveCode()" id="saveBtn">
+                <i class="bi bi-save"></i> Lưu
+            </button>
+            <!-- Nút "Nộp bài" đã bị xóa - hệ thống tự động nộp khi hết giờ -->
+        </div>
+    </div>
+
+    <!-- Split Container -->
+    <div class="split-container">
+        <!-- PDF Panel -->
+        <div class="pdf-panel hidden" id="pdfPanel">
+            <iframe id="pdfViewer" class="pdf-viewer"></iframe>
+        </div>
+
+        <!-- Resize Handle -->
+        <div class="resize-handle hidden" id="resizeHandle"></div>
+
+        <!-- IDE Panel -->
+        <div class="ide-panel fullscreen" id="idePanel">
+            <iframe id="ideFrame" class="ide-frame" src="/ide/index.html"></iframe>
+        </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <div class="status-indicator">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">Đã kết nối</span>
+        </div>
+        <div>
+            <span id="lastSaved">Chưa lưu</span>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Get URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const examId = urlParams.get('examId');
+        const problemId = urlParams.get('problemId');
+
+        let examData = null;
+        let problemData = null;
+        let autoSaveInterval = null;
+        let timerInterval = null;
+        let isSubmitted = false;
+        let saveResolve = null; // For promise-based save
+        let iframeReady = false; // Track iframe ready state
+        let currentCode = ''; // Cache current code from editor
+        let lastSavedTimestamp = null; // Track last save time
+        let eventSource = null; // SSE connection
+
+        // LocalStorage Helper Functions
+        function getLocalStorageKey() {
+            return `exam_code_${examId}_${problemId}`;
+        }
+
+        function saveToLocalStorage(code, languageId, languageName) {
+            try {
+                const key = getLocalStorageKey();
+                const data = {
+                    code: code,
+                    languageId: languageId,
+                    languageName: languageName,
+                    timestamp: Date.now(),
+                    expiry: Date.now() + (7 * 24 * 60 * 60 * 1000) // 1 week
+                };
+                localStorage.setItem(key, JSON.stringify(data));
+                console.log('[LOCALSTORAGE] Saved code, length:', code?.length);
+                return true;
+            } catch (error) {
+                console.error('[LOCALSTORAGE] Error saving:', error);
+                return false;
+            }
+        }
+
+        function loadFromLocalStorage() {
+            try {
+                const key = getLocalStorageKey();
+                const stored = localStorage.getItem(key);
+                if (!stored) {
+                    console.log('[LOCALSTORAGE] No saved code found');
+                    return null;
+                }
+
+                const data = JSON.parse(stored);
+
+                // Check expiry
+                if (Date.now() > data.expiry) {
+                    console.log('[LOCALSTORAGE] Code expired, removing');
+                    localStorage.removeItem(key);
+                    return null;
+                }
+
+                console.log('[LOCALSTORAGE] Loaded code, length:', data.code?.length);
+                return data;
+            } catch (error) {
+                console.error('[LOCALSTORAGE] Error loading:', error);
+                return null;
+            }
+        }
+
+        function clearLocalStorage() {
+            try {
+                const key = getLocalStorageKey();
+                localStorage.removeItem(key);
+                console.log('[LOCALSTORAGE] Cleared');
+            } catch (error) {
+                console.error('[LOCALSTORAGE] Error clearing:', error);
+            }
+        }
+
+        // Toast Notification
+        function showToast(type, title, message) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast-notification ${type}`;
+
+            const icons = {
+                success: '✓',
+                error: '✕',
+                info: 'ℹ'
+            };
+
+            toast.innerHTML = `
+                <div class="toast-icon">${icons[type] || 'ℹ'}</div>
+                <div class="toast-content">
+                    <div class="toast-title">${title}</div>
+                    ${message ? `<div class="toast-message">${message}</div>` : ''}
+                </div>
+            `;
+
+            container.appendChild(toast);
+
+            // Auto remove after 3 seconds
+            setTimeout(() => {
+                toast.classList.add('hiding');
+                setTimeout(() => {
+                    container.removeChild(toast);
+                }, 300);
+            }, 3000);
+        }
+
+        // Initialize
+        async function init() {
+            if (!examId || !problemId) {
+                alert('Thiếu thông tin kỳ thi hoặc bài thi');
+                window.location.href = '/exams.html';
+                return;
+            }
+
+            await loadExamData();
+            await loadProblemData();
+            await loadSavedCode();
+            startAutoSave();
+            startTimer();
+            setupResizeHandle();
+        }
+
+        // Load exam data
+        async function loadExamData() {
+            try {
+                const response = await fetch(`/api/user/exams/${examId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    examData = data.exam;
+                } else {
+                    alert(data.message);
+                    window.location.href = '/exams.html';
+                }
+            } catch (error) {
+                console.error('Error loading exam:', error);
+                alert('Lỗi khi tải thông tin kỳ thi');
+            }
+        }
+
+        // Load problem data
+        async function loadProblemData() {
+            if (!examData) return;
+            
+            problemData = examData.problems.find(p => p.id == problemId);
+            if (problemData) {
+                document.getElementById('problemTitle').innerHTML = 
+                    `<i class="bi bi-code-square"></i> ${problemData.problem_code} - ${problemData.problem_title}`;
+                
+                // Load PDF
+                document.getElementById('pdfViewer').src = `/api/user/problems/${problemId}/pdf`;
+            }
+        }
+
+        // Load saved code
+        async function loadSavedCode() {
+            try {
+                // Try localStorage first (faster and works offline)
+                const localData = loadFromLocalStorage();
+                let codeToLoad = null;
+                let languageId = null;
+                let lastSaved = null;
+
+                if (localData) {
+                    console.log('[LOAD] Found code in localStorage');
+                    codeToLoad = localData.code;
+                    languageId = localData.languageId;
+                    lastSaved = new Date(localData.timestamp);
+                    currentCode = codeToLoad; // Cache it
+                }
+
+                // Then try server (might have newer version)
+                const response = await fetch(`/api/submission/load/${examId}/${problemId}`);
+                const data = await response.json();
+
+                if (data.success && data.submission) {
+                    const serverTime = new Date(data.submission.updated_at).getTime();
+                    const localTime = localData ? localData.timestamp : 0;
+
+                    // Use server version if it's newer
+                    if (serverTime > localTime) {
+                        console.log('[LOAD] Server has newer version');
+                        codeToLoad = data.submission.source_code;
+                        languageId = data.submission.language_id;
+                        lastSaved = new Date(data.submission.updated_at);
+                        currentCode = codeToLoad; // Cache it
+                    }
+
+                    if (data.submission.status === 'submitted' || data.submission.status === 'auto_submitted') {
+                        isSubmitted = true;
+                        document.getElementById('saveBtn').disabled = true;
+                        document.getElementById('statusText').textContent = 'Đã nộp bài';
+                    }
+                }
+
+                // Load code into IDE if we have any
+                if (codeToLoad) {
+                    const ideFrame = document.getElementById('ideFrame');
+
+                    // Wait for iframe to load
+                    const loadCode = () => {
+                        console.log('[LOAD] Loading code into IDE, length:', codeToLoad?.length);
+                        ideFrame.contentWindow.postMessage({
+                            type: 'loadCode',
+                            code: codeToLoad,
+                            languageId: languageId
+                        }, '*');
+                    };
+
+                    if (ideFrame.contentWindow) {
+                        // Iframe already loaded
+                        setTimeout(loadCode, 500); // Small delay to ensure IDE is ready
+                    } else {
+                        // Wait for iframe to load
+                        ideFrame.addEventListener('load', () => {
+                            setTimeout(loadCode, 500);
+                        });
+                    }
+
+                    if (lastSaved) {
+                        updateLastSaved(lastSaved);
+                    }
+                }
+            } catch (error) {
+                console.error('[LOAD] Error loading saved code:', error);
+            }
+        }
+
+        // Save code
+        async function saveCode(silent = false) {
+            console.log('[SAVE] saveCode() called, isSubmitted:', isSubmitted, 'silent:', silent);
+
+            if (isSubmitted) {
+                if (!silent) alert('Bài đã được nộp, không thể chỉnh sửa');
+                return false;
+            }
+
+            // If iframe not ready, try to use cached code
+            if (!iframeReady && currentCode) {
+                console.log('[SAVE] Iframe not ready, using cached code');
+                return await saveCodeToServer(currentCode, null, null, silent);
+            }
+
+            return new Promise((resolve, reject) => {
+                try {
+                    // Store resolve function for later use
+                    saveResolve = resolve;
+
+                    // Get code from IDE iframe
+                    const ideFrame = document.getElementById('ideFrame');
+                    if (!ideFrame || !ideFrame.contentWindow) {
+                        console.error('[SAVE] Iframe not found');
+                        if (!silent) showToast('error', 'Lỗi', 'Không tìm thấy IDE');
+                        resolve(false);
+                        return;
+                    }
+
+                    console.log('[SAVE] Sending getCode message to iframe, ready:', iframeReady);
+                    ideFrame.contentWindow.postMessage({ type: 'getCode' }, '*');
+
+                    // Timeout after 3 seconds
+                    setTimeout(() => {
+                        if (saveResolve) {
+                            console.log('[SAVE] Timeout reached');
+
+                            // Try to save cached code as fallback
+                            if (currentCode) {
+                                console.log('[SAVE] Using cached code as fallback');
+                                saveCodeToServer(currentCode, null, null, silent).then(resolve);
+                            } else {
+                                if (!silent) showToast('error', 'Lỗi lưu code', 'Không nhận được phản hồi từ IDE');
+                                resolve(false);
+                            }
+
+                            saveResolve = null;
+                        }
+                    }, 3000);
+                } catch (error) {
+                    console.error('[SAVE] Error in saveCode:', error);
+                    if (!silent) showToast('error', 'Lỗi lưu code', error.message);
+                    reject(error);
+                }
+            });
+        }
+
+        // Save code to server (separated for reuse)
+        async function saveCodeToServer(code, languageId, languageName, silent = false) {
+            try {
+                console.log('[SAVE] Saving to server, code length:', code?.length);
+
+                // Save to localStorage first
+                saveToLocalStorage(code, languageId, languageName);
+
+                // Then save to server
+                const response = await fetch('/api/submission/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        exam_id: examId,
+                        problem_id: problemId,
+                        source_code: code,
+                        language_id: languageId,
+                        language_name: languageName
+                    })
+                });
+
+                const data = await response.json();
+                console.log('[SAVE] Server response:', data);
+
+                if (data.success) {
+                    updateLastSaved(new Date());
+                    document.getElementById('statusText').textContent = 'Đã lưu';
+                    if (!silent) showToast('success', 'Lưu thành công', 'Code đã được lưu');
+                    return true;
+                } else {
+                    document.getElementById('statusText').textContent = 'Lỗi: ' + data.message;
+                    if (!silent) showToast('error', 'Lỗi lưu', data.message);
+                    return false;
+                }
+            } catch (error) {
+                console.error('[SAVE] Error saving to server:', error);
+                if (!silent) showToast('error', 'Lỗi lưu', error.message);
+                return false;
+            }
+        }
+
+        // Manual submit function removed - system auto-submits when time expires
+
+        // Auto save every 10 minutes
+        function startAutoSave() {
+            autoSaveInterval = setInterval(() => {
+                if (!isSubmitted) {
+                    saveCode(true); // silent mode
+                }
+            }, 600000); // 10 minutes
+        }
+
+        // Timer
+        function startTimer() {
+            if (!examData) return;
+            
+            timerInterval = setInterval(() => {
+                const now = new Date();
+                const end = new Date(examData.end_time);
+                const diff = end - now;
+                
+                if (diff <= 0) {
+                    clearInterval(timerInterval);
+                    autoSubmitCode();
+                    document.getElementById('timer').textContent = '00:00:00';
+                    return;
+                }
+                
+                const hours = Math.floor(diff / 3600000);
+                const minutes = Math.floor((diff % 3600000) / 60000);
+                const seconds = Math.floor((diff % 60000) / 1000);
+                
+                document.getElementById('timer').textContent = 
+                    `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }, 1000);
+        }
+
+        // Auto submit when time is up
+        async function autoSubmitCode() {
+            if (isSubmitted) return;
+
+            console.log('[AUTO-SUBMIT] Time is up, auto-submitting...');
+
+            try {
+                // Save code first (silent mode)
+                console.log('[AUTO-SUBMIT] Saving code before submit...');
+                const saved = await saveCode(true);
+
+                if (!saved) {
+                    console.warn('[AUTO-SUBMIT] Failed to save code, but continuing with auto-submit');
+                }
+
+                // Then auto-submit
+                console.log('[AUTO-SUBMIT] Calling auto-submit API...');
+                const response = await fetch(`/api/submission/auto-submit/${examId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+                console.log('[AUTO-SUBMIT] Response:', data);
+
+                if (data.success) {
+                    isSubmitted = true;
+                    document.getElementById('saveBtn').disabled = true;
+                    document.getElementById('statusText').textContent = 'Đã tự động nộp bài';
+
+                    // Clear localStorage after successful submit
+                    clearLocalStorage();
+
+                    showToast('info', 'Hết giờ!', 'Bài thi đã được tự động nộp');
+                    alert('Hết giờ! Bài thi đã được tự động nộp.');
+                }
+            } catch (error) {
+                console.error('[AUTO-SUBMIT] Error:', error);
+                showToast('error', 'Lỗi tự động nộp bài', error.message);
+            }
+        }
+
+        // Update last saved time
+        function updateLastSaved(timestamp) {
+            const date = new Date(timestamp);
+            lastSavedTimestamp = date.getTime();
+            document.getElementById('lastSaved').textContent =
+                `Lưu lần cuối: ${date.toLocaleTimeString('vi-VN')}`;
+        }
+
+        // Toggle PDF panel
+        function togglePDF() {
+            const pdfPanel = document.getElementById('pdfPanel');
+            const idePanel = document.getElementById('idePanel');
+            const resizeHandle = document.getElementById('resizeHandle');
+            const toggleBtn = document.getElementById('togglePdfBtn');
+            const pdfViewer = document.getElementById('pdfViewer');
+
+            if (pdfPanel.classList.contains('hidden')) {
+                // Show PDF
+                pdfPanel.classList.remove('hidden');
+                idePanel.classList.remove('fullscreen');
+                resizeHandle.classList.remove('hidden');
+                pdfPanel.style.width = '50%';
+                idePanel.style.width = '50%';
+                toggleBtn.innerHTML = '<i class="bi bi-file-earmark-pdf-fill"></i> Ẩn đề';
+
+                // Set PDF zoom to 100%
+                if (pdfViewer.src) {
+                    const currentSrc = pdfViewer.src.split('#')[0];
+                    pdfViewer.src = currentSrc + '#zoom=100';
+                }
+            } else {
+                // Hide PDF
+                pdfPanel.classList.add('hidden');
+                pdfPanel.style.width = '0';
+                idePanel.classList.add('fullscreen');
+                idePanel.style.width = '100%';
+                resizeHandle.classList.add('hidden');
+                toggleBtn.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Đề bài';
+            }
+        }
+
+        // Back to problems list
+        function backToProblems() {
+            if (isSubmitted) {
+                // Already submitted, just go back
+                window.location.href = `/exam-view.html?id=${examId}`;
+                return;
+            }
+
+            // Check if saved recently (within 30 seconds)
+            const now = Date.now();
+            const savedRecently = lastSavedTimestamp && (now - lastSavedTimestamp) < 30000;
+
+            if (savedRecently) {
+                // Saved recently, just go back
+                window.location.href = `/exam-view.html?id=${examId}`;
+            } else {
+                // Not saved recently, ask for confirmation
+                if (confirm('Bạn có chắc muốn quay lại? Code chưa lưu sẽ bị mất.')) {
+                    window.location.href = `/exam-view.html?id=${examId}`;
+                }
+            }
+        }
+
+        // Setup resize handle
+        function setupResizeHandle() {
+            const handle = document.getElementById('resizeHandle');
+            const pdfPanel = document.getElementById('pdfPanel');
+            const idePanel = document.getElementById('idePanel');
+            let isResizing = false;
+
+            handle.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                document.body.style.cursor = 'col-resize';
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+                
+                const containerWidth = document.querySelector('.split-container').offsetWidth;
+                const newPdfWidth = (e.clientX / containerWidth) * 100;
+                
+                if (newPdfWidth > 20 && newPdfWidth < 80) {
+                    pdfPanel.style.width = newPdfWidth + '%';
+                    idePanel.style.width = (100 - newPdfWidth) + '%';
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                isResizing = false;
+                document.body.style.cursor = 'default';
+            });
+        }
+
+        // Listen for messages from IDE iframe
+        window.addEventListener('message', async (event) => {
+            console.log('[MESSAGE] Received message:', event.data.type);
+
+            // Mark iframe as ready when we receive first message
+            if (event.data.type === 'iframeReady') {
+                iframeReady = true;
+                console.log('[MESSAGE] Iframe marked as ready');
+                return;
+            }
+
+            if (event.data.type === 'codeData') {
+                console.log('[MESSAGE] Code data received:', {
+                    codeLength: event.data.code?.length,
+                    languageId: event.data.languageId,
+                    languageName: event.data.languageName
+                });
+
+                // Cache the code
+                currentCode = event.data.code;
+
+                // Save to localStorage first
+                saveToLocalStorage(event.data.code, event.data.languageId, event.data.languageName);
+
+                // Save code to server
+                try {
+                    console.log('[MESSAGE] Calling API /api/submission/save');
+                    const response = await fetch('/api/submission/save', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            exam_id: examId,
+                            problem_id: problemId,
+                            source_code: event.data.code,
+                            language_id: event.data.languageId,
+                            language_name: event.data.languageName
+                        })
+                    });
+
+                    const data = await response.json();
+                    console.log('[MESSAGE] Save API response:', data);
+
+                    if (data.success) {
+                        updateLastSaved(new Date());
+                        document.getElementById('statusText').textContent = 'Đã lưu';
+
+                        // Show success toast only if not silent
+                        if (saveResolve) {
+                            showToast('success', 'Lưu thành công', 'Code đã được lưu');
+                        }
+
+                        // Resolve save promise if waiting
+                        if (saveResolve) {
+                            console.log('[MESSAGE] Resolving save promise with true');
+                            saveResolve(true);
+                            saveResolve = null;
+                        }
+                    } else {
+                        document.getElementById('statusText').textContent = 'Lỗi: ' + data.message;
+                        if (saveResolve) {
+                            showToast('error', 'Lỗi lưu code', data.message);
+                        }
+
+                        // Resolve with false
+                        if (saveResolve) {
+                            console.log('[MESSAGE] Resolving save promise with false');
+                            saveResolve(false);
+                            saveResolve = null;
+                        }
+                    }
+                } catch (error) {
+                    console.error('[MESSAGE] Error saving:', error);
+                    document.getElementById('statusText').textContent = 'Lỗi khi lưu';
+                    if (saveResolve) {
+                        showToast('error', 'Lỗi khi lưu', error.message);
+                    }
+
+                    // Resolve with false
+                    if (saveResolve) {
+                        console.log('[MESSAGE] Resolving save promise with false (error)');
+                        saveResolve(false);
+                        saveResolve = null;
+                    }
+                }
+            }
+        });
+
+        // Connect to SSE for real-time exam events
+        function connectSSE() {
+            eventSource = new EventSource(`/api/exams/${examId}/events`);
+
+            eventSource.addEventListener('connected', (e) => {
+                console.log('[SSE] Connected to exam events');
+            });
+
+            eventSource.addEventListener('exam_stopped', async (e) => {
+                console.log('[SSE] Exam stopped by admin');
+                const data = JSON.parse(e.data);
+
+                // Stop timers
+                if (autoSaveInterval) clearInterval(autoSaveInterval);
+                if (timerInterval) clearInterval(timerInterval);
+
+                // Save and submit immediately
+                alert('Kỳ thi đã được dừng bởi giám thị. Hệ thống sẽ tự động lưu và nộp bài của bạn.');
+
+                try {
+                    // Save code first
+                    await saveCode(true);
+
+                    // Then auto-submit
+                    await autoSubmitCode();
+
+                    // Disable editor
+                    document.getElementById('saveBtn').disabled = true;
+                    document.getElementById('statusText').textContent = 'Kỳ thi đã kết thúc';
+
+                    showToast('warning', 'Kỳ thi đã dừng', 'Bài làm của bạn đã được tự động nộp');
+                } catch (error) {
+                    console.error('[SSE] Error during forced submit:', error);
+                    showToast('error', 'Lỗi', 'Không thể tự động nộp bài. Vui lòng liên hệ giám thị.');
+                }
+            });
+
+            eventSource.onerror = (error) => {
+                console.error('[SSE] Connection error:', error);
+                // Try to reconnect after 5 seconds
+                setTimeout(() => {
+                    if (eventSource.readyState === EventSource.CLOSED) {
+                        console.log('[SSE] Reconnecting...');
+                        connectSSE();
+                    }
+                }, 5000);
+            };
+        }
+
+        // Initialize on load
+        init();
+        connectSSE();
+
+        // Cleanup on unload
+        window.addEventListener('beforeunload', () => {
+            if (autoSaveInterval) clearInterval(autoSaveInterval);
+            if (timerInterval) clearInterval(timerInterval);
+            if (eventSource) eventSource.close();
+        });
+    </script>
+</body>
+</html>
+

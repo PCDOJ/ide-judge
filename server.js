@@ -2,12 +2,14 @@ const express = require('express');
 const session = require('express-session');
 const bodyParser = require('body-parser');
 const path = require('path');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const adminRoutes = require('./routes/admin');
 const examRoutes = require('./routes/exam');
+const submissionRoutes = require('./routes/submission');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
 
 const app = express();
@@ -35,11 +37,32 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Serve IDE Judge0 static files
+app.use('/ide', express.static(path.join(__dirname, 'ide-judge0')));
+
+// Proxy Judge0 API requests
+const judge0ApiUrl = process.env.JUDGE0_API_URL || 'http://localhost:2358';
+app.use('/judge0-api', createProxyMiddleware({
+    target: judge0ApiUrl,
+    changeOrigin: true,
+    pathRewrite: {
+        '^/judge0-api': ''
+    },
+    onError: (err, req, res) => {
+        console.error('Judge0 API proxy error:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Judge0 API is not available'
+        });
+    }
+}));
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api', examRoutes);
+app.use('/api/submission', submissionRoutes);
 
 // Protected routes for HTML pages
 app.get('/index.html', requireAuth, (req, res) => {

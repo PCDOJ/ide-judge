@@ -574,6 +574,9 @@ document.addEventListener("DOMContentLoaded", async function () {
                 }
             });
 
+            // Expose sourceEditor to window for exam integration
+            window.sourceEditor = sourceEditor;
+
             sourceEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, run);
 
             monaco.languages.registerInlineCompletionsProvider('*', {

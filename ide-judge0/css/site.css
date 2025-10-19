@@ -5,3 +5,11 @@ html, body {
     padding: 0;
     overflow: hidden;
 }
+
+/* Hide external links for exam mode */
+#judge0-header,
+.judge0-showHelpMenu,
+#report-problem-btn,
+.judge0-showCopyright {
+    display: none !important;
+}

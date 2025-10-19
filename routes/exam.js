@@ -2,9 +2,11 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const upload = require('../config/upload');
-const { isAdmin } = require('../middleware/auth');
+const { isAdmin, isAuthenticated } = require('../middleware/auth');
 const path = require('path');
 const fs = require('fs');
+const archiver = require('archiver');
+const sseManager = require('../utils/sse-manager');
 
 // Helper function to convert Vietnam time to UTC for database storage
 function vietnamToUTC(vietnamTimeStr) {
@@ -337,8 +339,6 @@ router.delete('/admin/problems/:id', isAdmin, async (req, res) => {
 
 // ==================== USER ROUTES ====================
 
-const { isAuthenticated } = require('../middleware/auth');
-
 // Get all exams for user (categorized by status)
 router.get('/user/exams', isAuthenticated, async (req, res) => {
     try {
@@ -660,6 +660,203 @@ router.get('/user/exams/:examId/participants', isAuthenticated, async (req, res)
         res.json({ success: true, participants });
     } catch (error) {
         console.error('Get participants error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Get all submissions for an exam (Admin) - for viewing student code
+router.get('/admin/exams/:examId/submissions', isAdmin, async (req, res) => {
+    try {
+        const examId = req.params.examId;
+
+        // Get exam info
+        const [exams] = await db.query('SELECT * FROM exams WHERE id = ?', [examId]);
+        if (exams.length === 0) {
+            return res.status(404).json({ success: false, message: 'Exam not found' });
+        }
+
+        // Get all submissions with user and problem info
+        const [submissions] = await db.query(`
+            SELECT
+                cs.*,
+                u.username,
+                u.fullname,
+                u.email,
+                ep.problem_code,
+                ep.problem_title
+            FROM code_submissions cs
+            JOIN users u ON cs.user_id = u.id
+            JOIN exam_problems ep ON cs.problem_id = ep.id
+            WHERE cs.exam_id = ?
+            ORDER BY u.fullname ASC, ep.display_order ASC
+        `, [examId]);
+
+        res.json({ success: true, submissions });
+    } catch (error) {
+        console.error('Get submissions error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Download all submissions as ZIP (Admin)
+router.get('/admin/exams/:examId/download-zip', isAdmin, async (req, res) => {
+    try {
+        const examId = req.params.examId;
+
+        // Get exam info
+        const [exams] = await db.query('SELECT * FROM exams WHERE id = ?', [examId]);
+        if (exams.length === 0) {
+            return res.status(404).json({ success: false, message: 'Exam not found' });
+        }
+        const exam = exams[0];
+
+        // Get all submissions with user and problem info
+        const [submissions] = await db.query(`
+            SELECT
+                cs.*,
+                u.username,
+                u.fullname,
+                u.email,
+                ep.problem_code,
+                ep.problem_title
+            FROM code_submissions cs
+            JOIN users u ON cs.user_id = u.id
+            JOIN exam_problems ep ON cs.problem_id = ep.id
+            WHERE cs.exam_id = ?
+            ORDER BY u.fullname ASC, ep.display_order ASC
+        `, [examId]);
+
+        if (submissions.length === 0) {
+            return res.status(404).json({ success: false, message: 'No submissions found' });
+        }
+
+        // Create ZIP archive
+        const archive = archiver('zip', {
+            zlib: { level: 9 } // Maximum compression
+        });
+
+        // Set response headers
+        const zipFilename = `${exam.title.replace(/[^a-zA-Z0-9]/g, '_')}_submissions.zip`;
+        res.attachment(zipFilename);
+        res.setHeader('Content-Type', 'application/zip');
+
+        // Pipe archive to response
+        archive.pipe(res);
+
+        // Group submissions by student
+        const studentMap = new Map();
+        submissions.forEach(sub => {
+            if (!studentMap.has(sub.user_id)) {
+                studentMap.set(sub.user_id, {
+                    fullname: sub.fullname,
+                    submissions: []
+                });
+            }
+            studentMap.get(sub.user_id).submissions.push(sub);
+        });
+
+        // Add files to archive
+        studentMap.forEach((student, userId) => {
+            const folderName = student.fullname.replace(/[^a-zA-Z0-9]/g, '_');
+
+            student.submissions.forEach(sub => {
+                const ext = getFileExtension(sub.language_id);
+                const filename = `${folderName}/${sub.problem_code}${ext}`;
+                const content = sub.source_code || '// No code';
+
+                archive.append(content, { name: filename });
+            });
+        });
+
+        // Finalize archive
+        archive.finalize();
+
+    } catch (error) {
+        console.error('Download ZIP error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Helper function to get file extension based on language ID
+function getFileExtension(languageId) {
+    const extensions = {
+        50: '.c',      // C
+        54: '.cpp',    // C++
+        71: '.py',     // Python
+        62: '.java',   // Java
+        63: '.js',     // JavaScript
+        51: '.cs',     // C#
+        60: '.go',     // Go
+        68: '.php',    // PHP
+        72: '.rb',     // Ruby
+        73: '.rs',     // Rust
+        74: '.ts'      // TypeScript
+    };
+    return extensions[languageId] || '.txt';
+}
+
+// SSE endpoint for exam events (Student)
+router.get('/exams/:examId/events', isAuthenticated, async (req, res) => {
+    const examId = req.params.examId;
+    const userId = req.session.userId;
+
+    // Set headers for SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+
+    // Send initial connection message
+    res.write(`event: connected\n`);
+    res.write(`data: ${JSON.stringify({ message: 'Connected to exam events' })}\n\n`);
+
+    // Add connection to SSE manager
+    sseManager.addConnection(examId, userId, res);
+
+    // Keep connection alive with heartbeat
+    const heartbeat = setInterval(() => {
+        res.write(`:heartbeat\n\n`);
+    }, 30000); // Every 30 seconds
+
+    // Clean up on disconnect
+    req.on('close', () => {
+        clearInterval(heartbeat);
+        sseManager.removeConnection(examId, userId);
+    });
+});
+
+// Stop exam and notify all clients (Admin)
+router.post('/admin/exams/:examId/stop', isAdmin, async (req, res) => {
+    try {
+        const examId = req.params.examId;
+
+        // Get exam info
+        const [exams] = await db.query('SELECT * FROM exams WHERE id = ?', [examId]);
+        if (exams.length === 0) {
+            return res.status(404).json({ success: false, message: 'Exam not found' });
+        }
+
+        // Update exam end time to now (force stop)
+        await db.query(
+            'UPDATE exams SET end_time = NOW() WHERE id = ?',
+            [examId]
+        );
+
+        // Send stop event to all connected clients
+        const clientCount = sseManager.sendToExam(examId, 'exam_stopped', {
+            message: 'Exam has been stopped by admin',
+            examId: examId,
+            timestamp: new Date().toISOString()
+        });
+
+        res.json({
+            success: true,
+            message: `Exam stopped and ${clientCount} client(s) notified`,
+            clientCount
+        });
+
+    } catch (error) {
+        console.error('Stop exam error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
