@@ -107,11 +107,13 @@ Lựa chọn (1/2): 2
 
 ## 🔧 Sử dụng trên VPS với Docker
 
-### Cách 1: Chạy trực tiếp trên VPS
+### ⭐ Cách 1: Chạy trực tiếp trên VPS (Khuyến nghị)
+
+Script sẽ **tự động detect** database host và port từ Docker container!
 
 ```bash
 # 1. SSH vào VPS
-ssh user@your-vps-ip
+ssh root@your-vps-ip
 
 # 2. Di chuyển vào thư mục project
 cd /path/to/ide-judge
@@ -119,9 +121,18 @@ cd /path/to/ide-judge
 # 3. Cài đặt Python dependencies (chỉ cần 1 lần)
 pip3 install -r requirements-manage.txt
 
+# Hoặc cài thủ công:
+pip3 install mysql-connector-python python-dotenv bcrypt
+
 # 4. Chạy script
 python3 manage.py
 ```
+
+**Script sẽ tự động:**
+- ✅ Phát hiện Docker container `ide-judge-mariadb`
+- ✅ Lấy port mapping (ví dụ: `2310:3306`)
+- ✅ Kết nối qua `localhost:2310`
+- ✅ Không cần sửa file `.env`!
 
 ### Cách 2: Chạy trong Docker container
 

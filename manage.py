@@ -10,18 +10,84 @@ import mysql.connector
 from getpass import getpass
 import bcrypt
 from datetime import datetime
+import subprocess
+import json
 
 # Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
 
+def detect_database_host():
+    """
+    Tự động detect database host:
+    1. Nếu chạy trong Docker container -> dùng 'mariadb'
+    2. Nếu chạy ngoài Docker -> dùng 'localhost' hoặc '127.0.0.1'
+    3. Kiểm tra docker-compose để lấy port mapping
+    """
+    db_host = os.getenv('DB_HOST', 'mariadb')
+    db_port = int(os.getenv('DB_PORT', 3306))
+
+    # Kiểm tra xem có đang chạy trong Docker container không
+    if os.path.exists('/.dockerenv'):
+        # Đang chạy trong container -> dùng hostname từ docker-compose
+        return db_host, db_port
+
+    # Chạy ngoài Docker -> cần kết nối qua localhost với port mapping
+    # Kiểm tra docker-compose để lấy port mapping
+    try:
+        # Thử lấy thông tin container MariaDB
+        result = subprocess.run(
+            ['docker', 'inspect', 'ide-judge-mariadb'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+
+        if result.returncode == 0:
+            container_info = json.loads(result.stdout)
+            if container_info:
+                # Lấy port mapping
+                ports = container_info[0].get('NetworkSettings', {}).get('Ports', {})
+                mysql_ports = ports.get('3306/tcp', [])
+
+                if mysql_ports and len(mysql_ports) > 0:
+                    host_port = mysql_ports[0].get('HostPort')
+                    if host_port:
+                        print(f"🔍 Phát hiện MariaDB container với port mapping: localhost:{host_port}")
+                        return 'localhost', int(host_port)
+    except Exception as e:
+        print(f"⚠️  Không thể detect Docker container: {e}")
+
+    # Fallback: thử các options phổ biến
+    # Kiểm tra docker-compose.yml để lấy port
+    try:
+        if os.path.exists('docker-compose.yml'):
+            with open('docker-compose.yml', 'r') as f:
+                content = f.read()
+                # Tìm port mapping cho mariadb (ví dụ: "2310:3306")
+                import re
+                port_match = re.search(r'ports:.*?-\s*["\']?(\d+):3306["\']?', content, re.DOTALL)
+                if port_match:
+                    mapped_port = int(port_match.group(1))
+                    print(f"🔍 Phát hiện port mapping từ docker-compose.yml: localhost:{mapped_port}")
+                    return 'localhost', mapped_port
+    except Exception as e:
+        print(f"⚠️  Không thể đọc docker-compose.yml: {e}")
+
+    # Default fallback
+    print(f"⚠️  Sử dụng cấu hình mặc định: localhost:3306")
+    return 'localhost', 3306
+
+# Detect database host and port
+detected_host, detected_port = detect_database_host()
+
 # Database configuration
 DB_CONFIG = {
-    'host': os.getenv('DB_HOST', 'localhost'),
+    'host': detected_host,
     'user': os.getenv('DB_USER', 'root'),
     'password': os.getenv('DB_PASSWORD'),
     'database': os.getenv('DB_NAME', 'ide_judge_db'),
-    'port': int(os.getenv('DB_PORT', 3306))
+    'port': detected_port
 }
 
 def get_db_connection():
@@ -328,15 +394,27 @@ def main():
     """Main function"""
     print("\n🚀 IDE Judge - User Management Tool")
     print("📅 " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    
+
+    # Hiển thị thông tin cấu hình
+    print("\n📋 Cấu hình database:")
+    print(f"   Host: {DB_CONFIG['host']}")
+    print(f"   Port: {DB_CONFIG['port']}")
+    print(f"   Database: {DB_CONFIG['database']}")
+    print(f"   User: {DB_CONFIG['user']}")
+
     # Kiểm tra kết nối database
     print("\n🔍 Kiểm tra kết nối database...")
     try:
         conn = get_db_connection()
-        print(f"✅ Kết nối thành công: {DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}")
+        print(f"✅ Kết nối thành công!")
         conn.close()
     except Exception as e:
         print(f"❌ Không thể kết nối database: {e}")
+        print("\n💡 Gợi ý:")
+        print("   1. Kiểm tra MariaDB container có đang chạy không:")
+        print("      docker-compose ps mariadb")
+        print("   2. Kiểm tra file .env có đúng DB_PASSWORD không")
+        print("   3. Nếu chạy ngoài Docker, đảm bảo port mapping đúng")
         sys.exit(1)
     
     while True:
