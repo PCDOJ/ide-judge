@@ -14,6 +14,7 @@
     let currentExamId = null;
     let currentExamTitle = null;
     let pageJustLoaded = true; // Flag to prevent false positives on page load
+    let lastBlurTime = 0; // Track last blur event to prevent duplicate triggers
 
     // LocalStorage keys
     const STORAGE_KEY_MONITORING = 'exam_monitoring_active';
@@ -52,12 +53,12 @@
         setTimeout(() => {
             pageJustLoaded = false;
             console.log('[EXAM-MONITOR] Page load grace period ended, monitoring fully active');
-        }, 2000); // 2 second grace period after page load
+        }, 3000); // 3 second grace period after page load (increased from 2s)
 
         // Add event listeners
         document.addEventListener('visibilitychange', handleVisibilityChange);
-        window.addEventListener('blur', handleWindowBlur);
-        window.addEventListener('focus', handleWindowFocus);
+        window.addEventListener('blur', handleWindowBlur, true); // Use capture phase
+        window.addEventListener('focus', handleWindowFocus, true); // Use capture phase
         window.addEventListener('beforeunload', handleBeforeUnload);
         document.addEventListener('mouseleave', handleMouseLeave);
         document.addEventListener('contextmenu', handleContextMenu);
@@ -128,14 +129,15 @@
 
             if (!document.hasFocus() && monitoringActive) {
                 const now = Date.now();
-                // Only log if focus lost for more than 1 second
-                if (now - lastFocusCheck > 1000 && !tabLeftTime) {
+                // Only log if focus lost for more than 3 seconds to reduce false positives
+                // This prevents triggering when user briefly interacts with IDE iframe
+                if (now - lastFocusCheck > 3000 && !tabLeftTime) {
                     console.log('[EXAM-MONITOR] Focus lost detected');
                     onTabLeft('focus_lost');
                 }
             }
             lastFocusCheck = Date.now();
-        }, 1000); // Check every second
+        }, 2000); // Check every 2 seconds (reduced frequency)
     }
 
     // Handle visibility change
@@ -167,11 +169,22 @@
             return;
         }
 
+        // Prevent duplicate triggers within 2 seconds
+        const now = Date.now();
+        if (now - lastBlurTime < 2000) {
+            console.log('[EXAM-MONITOR] Window blur - too soon after last blur, ignoring');
+            return;
+        }
+        lastBlurTime = now;
+
         console.log('[EXAM-MONITOR] Window blur - window lost focus');
         // Only log if not already logged by visibility change
-        if (!document.hidden && !tabLeftTime) {
-            onTabLeft('window_blur');
-        }
+        // Add delay to prevent false positives from IDE iframe interactions
+        setTimeout(() => {
+            if (!document.hidden && !tabLeftTime && !document.hasFocus()) {
+                onTabLeft('window_blur');
+            }
+        }, 500); // 500ms delay to filter out brief focus changes
     }
 
     // Handle window focus
@@ -188,15 +201,19 @@
     function handleMouseLeave(e) {
         if (!monitoringActive) return;
 
+        // Skip if page just loaded
+        if (pageJustLoaded) return;
+
         // Only trigger if mouse actually left the window
         if (e.clientY <= 0 || e.clientX <= 0 ||
             e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
             console.log('[EXAM-MONITOR] Mouse left window boundary');
+            // Increase delay to 1 second to reduce false positives
             setTimeout(() => {
-                if (!document.hasFocus() && !tabLeftTime) {
+                if (!document.hasFocus() && !tabLeftTime && !document.hidden) {
                     onTabLeft('mouse_leave');
                 }
-            }, 500);
+            }, 1000);
         }
     }
 
