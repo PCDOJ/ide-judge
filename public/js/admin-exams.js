@@ -117,6 +117,11 @@ function renderExamsTable() {
                     <button class="btn btn-sm btn-warning" onclick="window.location.href='/admin/exam-submissions.html?id=${exam.id}'">
                         <i class="bi bi-code-square"></i> Bài làm
                     </button>
+                    ${exam.prevent_tab_switch ? `
+                    <button class="btn btn-sm btn-danger" onclick="window.location.href='/admin/exam-violations.html?id=${exam.id}'" title="Xem vi phạm thoát tab">
+                        <i class="bi bi-shield-exclamation"></i> Vi phạm
+                    </button>
+                    ` : ''}
                     <button class="btn btn-sm btn-outline-primary" onclick="openEditModal(${exam.id})">
                         <i class="bi bi-pencil"></i>
                     </button>
@@ -147,6 +152,7 @@ async function addExam() {
     const end_time = document.getElementById('newExamEndTime').value;
     const has_access_code = document.getElementById('newExamHasAccessCode').checked;
     const access_code = document.getElementById('newExamAccessCode').value;
+    const prevent_tab_switch = document.getElementById('newExamPreventTabSwitch').checked;
 
     if (!title || !start_time || !end_time) {
         showAlert('Vui lòng điền đầy đủ thông tin bắt buộc', 'warning');
@@ -173,7 +179,8 @@ async function addExam() {
                 start_time: startTimeFormatted,
                 end_time: endTimeFormatted,
                 has_access_code,
-                access_code: has_access_code ? access_code : null
+                access_code: has_access_code ? access_code : null,
+                prevent_tab_switch
             })
         });
 
@@ -183,8 +190,9 @@ async function addExam() {
             showAlert('Tạo kỳ thi thành công!', 'success');
             bootstrap.Modal.getInstance(document.getElementById('addExamModal')).hide();
             document.getElementById('addExamForm').reset();
-            // Reset checkbox and hide access code group
+            // Reset checkboxes and hide access code group
             document.getElementById('newExamHasAccessCode').checked = false;
+            document.getElementById('newExamPreventTabSwitch').checked = false;
             document.getElementById('newAccessCodeGroup').style.display = 'none';
             loadExams();
         } else {
@@ -216,6 +224,9 @@ async function openEditModal(examId) {
             document.getElementById('editAccessCodeGroup').style.display = hasAccessCode ? 'block' : 'none';
             document.getElementById('editExamAccessCode').value = exam.access_code || '';
 
+            // Set prevent_tab_switch checkbox
+            document.getElementById('editExamPreventTabSwitch').checked = exam.prevent_tab_switch || false;
+
             new bootstrap.Modal(document.getElementById('editExamModal')).show();
         } else {
             showAlert('Không thể tải thông tin kỳ thi', 'danger');
@@ -235,6 +246,7 @@ async function updateExam() {
     const end_time = document.getElementById('editExamEndTime').value;
     const has_access_code = document.getElementById('editExamHasAccessCode').checked;
     const access_code = document.getElementById('editExamAccessCode').value;
+    const prevent_tab_switch = document.getElementById('editExamPreventTabSwitch').checked;
 
     if (!title || !start_time || !end_time) {
         showAlert('Vui lòng điền đầy đủ thông tin bắt buộc', 'warning');
@@ -260,7 +272,8 @@ async function updateExam() {
                 start_time: startTimeFormatted,
                 end_time: endTimeFormatted,
                 has_access_code,
-                access_code: has_access_code ? access_code : null
+                access_code: has_access_code ? access_code : null,
+                prevent_tab_switch
             })
         });
 

@@ -113,7 +113,7 @@ router.get('/admin/exams/:id', isAdmin, async (req, res) => {
 // Create new exam (Admin)
 router.post('/admin/exams', isAdmin, async (req, res) => {
     try {
-        const { title, description, start_time, end_time, access_code, has_access_code } = req.body;
+        const { title, description, start_time, end_time, access_code, has_access_code, prevent_tab_switch } = req.body;
 
         if (!title || !start_time || !end_time) {
             return res.status(400).json({
@@ -129,11 +129,12 @@ router.post('/admin/exams', isAdmin, async (req, res) => {
         // Only save access_code if has_access_code is true
         const finalAccessCode = has_access_code ? (access_code || null) : null;
         const finalHasAccessCode = has_access_code ? true : false;
+        const finalPreventTabSwitch = prevent_tab_switch ? true : false;
 
         const [result] = await db.query(`
-            INSERT INTO exams (title, description, start_time, end_time, access_code, has_access_code, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `, [title, description, startTimeUTC, endTimeUTC, finalAccessCode, finalHasAccessCode, req.session.userId]);
+            INSERT INTO exams (title, description, start_time, end_time, access_code, has_access_code, prevent_tab_switch, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [title, description, startTimeUTC, endTimeUTC, finalAccessCode, finalHasAccessCode, finalPreventTabSwitch, req.session.userId]);
 
         res.json({
             success: true,
@@ -149,7 +150,7 @@ router.post('/admin/exams', isAdmin, async (req, res) => {
 // Update exam (Admin)
 router.put('/admin/exams/:id', isAdmin, async (req, res) => {
     try {
-        const { title, description, start_time, end_time, access_code, has_access_code } = req.body;
+        const { title, description, start_time, end_time, access_code, has_access_code, prevent_tab_switch } = req.body;
         const examId = req.params.id;
 
         if (!title || !start_time || !end_time) {
@@ -166,12 +167,13 @@ router.put('/admin/exams/:id', isAdmin, async (req, res) => {
         // Only save access_code if has_access_code is true
         const finalAccessCode = has_access_code ? (access_code || null) : null;
         const finalHasAccessCode = has_access_code ? true : false;
+        const finalPreventTabSwitch = prevent_tab_switch ? true : false;
 
         await db.query(`
             UPDATE exams
-            SET title = ?, description = ?, start_time = ?, end_time = ?, access_code = ?, has_access_code = ?
+            SET title = ?, description = ?, start_time = ?, end_time = ?, access_code = ?, has_access_code = ?, prevent_tab_switch = ?
             WHERE id = ?
-        `, [title, description, startTimeUTC, endTimeUTC, finalAccessCode, finalHasAccessCode, examId]);
+        `, [title, description, startTimeUTC, endTimeUTC, finalAccessCode, finalHasAccessCode, finalPreventTabSwitch, examId]);
 
         res.json({ success: true, message: 'Exam updated successfully' });
     } catch (error) {
@@ -898,6 +900,253 @@ router.post('/admin/exams/:examId/stop', isAdmin, async (req, res) => {
 
     } catch (error) {
         console.error('Stop exam error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Log tab violation (User)
+router.post('/exam-violations/log', isAuthenticated, async (req, res) => {
+    try {
+        const { exam_id, problem_id, left_at, returned_at, violation_type } = req.body;
+        const userId = req.session.userId;
+
+        if (!exam_id || !left_at) {
+            return res.status(400).json({
+                success: false,
+                message: 'exam_id and left_at are required'
+            });
+        }
+
+        // Convert ISO 8601 to MySQL datetime format (YYYY-MM-DD HH:MM:SS)
+        const formatDateForMySQL = (isoString) => {
+            if (!isoString) return null;
+            const date = new Date(isoString);
+            return date.toISOString().slice(0, 19).replace('T', ' ');
+        };
+
+        const leftAtFormatted = formatDateForMySQL(left_at);
+        const returnedAtFormatted = formatDateForMySQL(returned_at);
+
+        // Calculate duration if returned_at is provided
+        let durationSeconds = null;
+        if (returned_at && left_at) {
+            const leftTime = new Date(left_at);
+            const returnedTime = new Date(returned_at);
+            durationSeconds = Math.floor((returnedTime - leftTime) / 1000);
+        }
+
+        // Insert violation log
+        await db.query(`
+            INSERT INTO exam_tab_violations (exam_id, user_id, problem_id, left_at, returned_at, duration_seconds, violation_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [exam_id, userId, problem_id || null, leftAtFormatted, returnedAtFormatted, durationSeconds, violation_type || 'tab_hidden']);
+
+        res.json({ success: true, message: 'Violation logged successfully' });
+    } catch (error) {
+        console.error('Log violation error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Update violation when user returns to tab (User)
+router.put('/exam-violations/update-return', isAuthenticated, async (req, res) => {
+    try {
+        const { exam_id, returned_at, duration_seconds } = req.body;
+        const userId = req.session.userId;
+
+        if (!exam_id || !returned_at) {
+            return res.status(400).json({
+                success: false,
+                message: 'exam_id and returned_at are required'
+            });
+        }
+
+        // Convert ISO 8601 to MySQL datetime format
+        const formatDateForMySQL = (isoString) => {
+            if (!isoString) return null;
+            const date = new Date(isoString);
+            return date.toISOString().slice(0, 19).replace('T', ' ');
+        };
+
+        const returnedAtFormatted = formatDateForMySQL(returned_at);
+
+        // Find the most recent violation without returned_at
+        const [violations] = await db.query(`
+            SELECT id, left_at FROM exam_tab_violations
+            WHERE exam_id = ? AND user_id = ? AND returned_at IS NULL
+            ORDER BY left_at DESC
+            LIMIT 1
+        `, [exam_id, userId]);
+
+        if (violations.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'No open violation found'
+            });
+        }
+
+        const violation = violations[0];
+
+        // Use duration from client if provided (more accurate), otherwise calculate
+        let finalDuration = duration_seconds;
+        if (!finalDuration || finalDuration <= 0) {
+            const leftTime = new Date(violation.left_at);
+            const returnedTime = new Date(returned_at);
+            finalDuration = Math.floor((returnedTime - leftTime) / 1000);
+        }
+
+        // Update the violation
+        await db.query(`
+            UPDATE exam_tab_violations
+            SET returned_at = ?, duration_seconds = ?
+            WHERE id = ?
+        `, [returnedAtFormatted, finalDuration, violation.id]);
+
+        res.json({ success: true, message: 'Violation updated successfully' });
+    } catch (error) {
+        console.error('Update violation error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Get violations for an exam (Admin)
+// Get list of students registered for exam with violation stats
+router.get('/admin/exams/:examId/students', isAdmin, async (req, res) => {
+    try {
+        const examId = req.params.examId;
+
+        // Get exam info
+        const [exams] = await db.query('SELECT * FROM exams WHERE id = ?', [examId]);
+        if (exams.length === 0) {
+            return res.status(404).json({ success: false, message: 'Exam not found' });
+        }
+
+        // Get all registered students with their violation stats
+        const [students] = await db.query(`
+            SELECT
+                u.id,
+                u.username,
+                u.fullname,
+                u.email,
+                er.created_at as registered_at,
+                COUNT(DISTINCT v.id) as violation_count,
+                COALESCE(SUM(v.duration_seconds), 0) as total_duration_seconds,
+                MAX(v.left_at) as last_violation_at
+            FROM exam_registrations er
+            JOIN users u ON er.user_id = u.id
+            LEFT JOIN exam_tab_violations v ON v.exam_id = er.exam_id AND v.user_id = u.id
+            WHERE er.exam_id = ?
+            GROUP BY u.id, u.username, u.fullname, u.email, er.created_at
+            ORDER BY violation_count DESC, u.fullname ASC
+        `, [examId]);
+
+        // Calculate overall statistics
+        const stats = {
+            totalStudents: students.length,
+            studentsWithViolations: students.filter(s => s.violation_count > 0).length,
+            totalViolations: students.reduce((sum, s) => sum + s.violation_count, 0),
+            totalDuration: students.reduce((sum, s) => sum + (s.total_duration_seconds || 0), 0)
+        };
+
+        res.json({
+            success: true,
+            exam: exams[0],
+            students,
+            stats
+        });
+    } catch (error) {
+        console.error('Get students error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Get violations for a specific student in an exam
+router.get('/admin/exams/:examId/students/:userId/violations', isAdmin, async (req, res) => {
+    try {
+        const { examId, userId } = req.params;
+
+        // Get student info
+        const [users] = await db.query('SELECT id, username, fullname, email FROM users WHERE id = ?', [userId]);
+        if (users.length === 0) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        // Get all violations for this student in this exam
+        const [violations] = await db.query(`
+            SELECT
+                v.*,
+                ep.problem_code,
+                ep.problem_title
+            FROM exam_tab_violations v
+            LEFT JOIN exam_problems ep ON v.problem_id = ep.id
+            WHERE v.exam_id = ? AND v.user_id = ?
+            ORDER BY v.left_at DESC
+        `, [examId, userId]);
+
+        // Calculate statistics
+        const stats = {
+            totalViolations: violations.length,
+            totalDuration: violations.reduce((sum, v) => sum + (v.duration_seconds || 0), 0),
+            violationsByType: violations.reduce((acc, v) => {
+                acc[v.violation_type] = (acc[v.violation_type] || 0) + 1;
+                return acc;
+            }, {})
+        };
+
+        res.json({
+            success: true,
+            student: users[0],
+            violations,
+            stats
+        });
+    } catch (error) {
+        console.error('Get student violations error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Legacy endpoint - keep for backward compatibility
+router.get('/admin/exams/:examId/violations', isAdmin, async (req, res) => {
+    try {
+        const examId = req.params.examId;
+
+        // Get exam info
+        const [exams] = await db.query('SELECT * FROM exams WHERE id = ?', [examId]);
+        if (exams.length === 0) {
+            return res.status(404).json({ success: false, message: 'Exam not found' });
+        }
+
+        // Get all violations with user and problem info
+        const [violations] = await db.query(`
+            SELECT
+                v.*,
+                u.username,
+                u.fullname,
+                u.email,
+                ep.problem_code,
+                ep.problem_title
+            FROM exam_tab_violations v
+            JOIN users u ON v.user_id = u.id
+            LEFT JOIN exam_problems ep ON v.problem_id = ep.id
+            WHERE v.exam_id = ?
+            ORDER BY v.left_at DESC
+        `, [examId]);
+
+        // Calculate statistics
+        const stats = {
+            totalViolations: violations.length,
+            uniqueStudents: [...new Set(violations.map(v => v.user_id))].length,
+            totalDuration: violations.reduce((sum, v) => sum + (v.duration_seconds || 0), 0)
+        };
+
+        res.json({
+            success: true,
+            exam: exams[0],
+            violations,
+            stats
+        });
+    } catch (error) {
+        console.error('Get violations error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });

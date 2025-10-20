@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS exams (
     end_time DATETIME NOT NULL,
     access_code VARCHAR(50) DEFAULT NULL,
     has_access_code BOOLEAN NOT NULL DEFAULT FALSE,
+    prevent_tab_switch BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Bật chế độ chống chuyển tab',
     created_by INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -129,4 +130,35 @@ CREATE TABLE IF NOT EXISTS submission_history (
     INDEX idx_action_type (action_type),
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Table: exam_tab_violations (Vi phạm thoát tab trong kỳ thi)
+CREATE TABLE IF NOT EXISTS exam_tab_violations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    exam_id INT NOT NULL,
+    user_id INT NOT NULL,
+    problem_id INT DEFAULT NULL,
+    left_at DATETIME NOT NULL COMMENT 'Thời điểm rời khỏi tab',
+    returned_at DATETIME DEFAULT NULL COMMENT 'Thời điểm quay lại tab',
+    duration_seconds INT DEFAULT NULL COMMENT 'Thời gian rời tab (giây)',
+    violation_type ENUM(
+        'tab_hidden',           -- Chuyển sang tab khác
+        'window_blur',          -- Click ra ngoài cửa sổ
+        'page_unload',          -- Cố gắng đóng/rời trang
+        'mouse_leave',          -- Di chuyển chuột ra ngoài
+        'keyboard_shortcut',    -- Sử dụng phím tắt chuyển tab
+        'devtools_attempt',     -- Cố gắng mở DevTools
+        'close_attempt',        -- Cố gắng đóng tab
+        'exit_fullscreen',      -- Thoát chế độ toàn màn hình
+        'focus_lost'            -- Mất focus của cửa sổ
+    ) NOT NULL DEFAULT 'tab_hidden' COMMENT 'Loại vi phạm',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (problem_id) REFERENCES exam_problems(id) ON DELETE SET NULL,
+    INDEX idx_exam_user (exam_id, user_id),
+    INDEX idx_left_at (left_at),
+    INDEX idx_violation_type (violation_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Lưu trữ các vi phạm thoát tab trong quá trình thi';
 
