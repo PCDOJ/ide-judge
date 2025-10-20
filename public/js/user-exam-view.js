@@ -46,11 +46,17 @@ async function loadExamDetails() {
     try {
         const response = await fetch(`/api/user/exams/${examId}`);
         const data = await response.json();
-        
+
         if (data.success) {
             currentExam = data.exam;
             renderExamHeader();
             renderProblemsList();
+
+            // Enable monitoring if exam has prevent_tab_switch enabled
+            if (currentExam.prevent_tab_switch && window.ExamMonitoring) {
+                console.log('[EXAM-VIEW] Enabling monitoring for exam:', currentExam.id);
+                window.ExamMonitoring.enable(currentExam.id, currentExam.title);
+            }
         } else {
             showAlert(data.message || 'Không thể tải thông tin kỳ thi', 'danger');
             setTimeout(() => window.location.href = '/exams.html', 2000);
@@ -154,15 +160,21 @@ async function leaveExam() {
     if (!confirm('Bạn có chắc chắn muốn rời khỏi kỳ thi? Bạn sẽ không thể tham gia lại và không thể xem đề nữa.')) {
         return;
     }
-    
+
     try {
         const response = await fetch(`/api/user/exams/${examId}/leave`, {
             method: 'POST'
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
+            // Disable monitoring when leaving exam
+            if (window.ExamMonitoring) {
+                console.log('[EXAM-VIEW] Disabling monitoring - user left exam');
+                window.ExamMonitoring.disable();
+            }
+
             showAlert('Đã rời khỏi kỳ thi', 'success');
             setTimeout(() => window.location.href = '/exams.html', 1500);
         } else {

@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vi phạm thoát tab - Admin Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1000;
+            transition: transform 0.3s ease-in-out;
+        }
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.8);
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            margin: 0.25rem 0;
+            transition: all 0.3s;
+        }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+
+        /* Mobile menu toggle */
+        .mobile-menu-toggle {
+            display: none;
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 1001;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        /* Responsive styles */
+        @media (max-width: 767.98px) {
+            .sidebar {
+                transform: translateX(-100%);
+                width: 80% !important;
+                max-width: 300px;
+            }
+
+            .sidebar.show {
+                transform: translateX(0);
+            }
+
+            .mobile-menu-toggle {
+                display: block;
+            }
+
+            .main-content {
+                margin-left: 0 !important;
+                padding-top: 60px !important;
+            }
+
+            .sidebar-overlay {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                z-index: 999;
+            }
+
+            .sidebar-overlay.show {
+                display: block;
+            }
+        }
+
+        @media (min-width: 768px) {
+            .sidebar {
+                position: relative;
+            }
+        }
+
+        .stats-card {
+            border-left: 4px solid;
+            transition: transform 0.2s;
+        }
+        .stats-card:hover {
+            transform: translateY(-2px);
+        }
+        .stats-card.total {
+            border-left-color: #dc3545;
+        }
+        .stats-card.students {
+            border-left-color: #ffc107;
+        }
+        .stats-card.violations {
+            border-left-color: #28a745;
+        }
+
+        .student-card {
+            transition: all 0.3s;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        .student-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        .student-card.has-violations {
+            border-left: 4px solid #dc3545;
+        }
+        .student-card.no-violations {
+            border-left: 4px solid #28a745;
+        }
+        .stats-card.duration {
+            border-left-color: #17a2b8;
+        }
+    </style>
+</head>
+<body>
+    <!-- Mobile Menu Toggle -->
+    <button class="mobile-menu-toggle" id="mobileMenuToggle">
+        <i class="bi bi-list fs-4"></i>
+    </button>
+
+    <!-- Sidebar Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-2 sidebar p-3" id="sidebar">
+                <div class="text-center mb-4">
+                    <h4 class="text-white"><i class="bi bi-shield-check"></i> Admin Panel</h4>
+                </div>
+                <div class="mt-4">
+                    <nav class="nav flex-column">
+                        <a class="nav-link" href="/admin/index.html">
+                            <i class="bi bi-speedometer2"></i> Dashboard
+                        </a>
+                        <a class="nav-link" href="/admin/users.html">
+                            <i class="bi bi-people"></i> Quản lý người dùng
+                        </a>
+                        <a class="nav-link active" href="/admin/exams.html">
+                            <i class="bi bi-journal-text"></i> Quản lý kỳ thi
+                        </a>
+                        <a class="nav-link" href="/index.html">
+                            <i class="bi bi-house"></i> Về trang chủ
+                        </a>
+                        <hr class="text-white">
+                        <a class="nav-link" href="#" id="logoutBtn">
+                            <i class="bi bi-box-arrow-right"></i> Đăng xuất
+                        </a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-10 p-4 main-content">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h2><i class="bi bi-shield-exclamation text-danger"></i> Vi phạm thoát tab</h2>
+                        <p class="text-muted mb-0" id="examTitle">Đang tải...</p>
+                    </div>
+                    <button class="btn btn-secondary" onclick="window.history.back()">
+                        <i class="bi bi-arrow-left"></i> Quay lại
+                    </button>
+                </div>
+
+                <!-- Statistics Cards -->
+                <div class="row mb-4" id="statsContainer">
+                    <div class="col-md-4 mb-3">
+                        <div class="card stats-card total shadow-sm">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-2">Tổng số vi phạm</h6>
+                                <h3 class="mb-0" id="totalViolations">
+                                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                                </h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card stats-card students shadow-sm">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-2">Số thí sinh vi phạm</h6>
+                                <h3 class="mb-0" id="uniqueStudents">
+                                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                                </h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card stats-card duration shadow-sm">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-2">Tổng thời gian vi phạm</h6>
+                                <h3 class="mb-0" id="totalDuration">
+                                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                                </h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="card shadow-sm mb-3">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-6 mb-2">
+                                <input type="text" class="form-control" id="studentFilter" placeholder="🔍 Tìm theo tên hoặc email thí sinh" onkeyup="renderStudents()">
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <select class="form-select" id="statusFilter" onchange="renderStudents()">
+                                    <option value="all">Tất cả thí sinh</option>
+                                    <option value="violations">Có vi phạm</option>
+                                    <option value="clean">Không vi phạm</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <button class="btn btn-outline-secondary w-100" onclick="resetFilters()">
+                                    <i class="bi bi-arrow-clockwise"></i> Reset
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Students List -->
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="bi bi-people"></i> Danh sách thí sinh</h5>
+                    </div>
+                    <div class="card-body" id="studentsContainer">
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="text-muted mt-2">Đang tải danh sách...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Student Violations Details -->
+    <div class="modal fade" id="violationsModal" tabindex="-1" aria-labelledby="violationsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="violationsModalLabel">
+                        <i class="bi bi-shield-exclamation text-danger"></i> Chi tiết vi phạm
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <h6 class="text-muted">Thí sinh:</h6>
+                        <h5 id="modalStudentName">-</h5>
+                        <p class="text-muted mb-0" id="modalStudentEmail">-</p>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="card border-danger">
+                                <div class="card-body text-center">
+                                    <h6 class="text-muted">Tổng vi phạm</h6>
+                                    <h3 class="text-danger mb-0" id="modalTotalViolations">0</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-warning">
+                                <div class="card-body text-center">
+                                    <h6 class="text-muted">Tổng thời gian</h6>
+                                    <h3 class="text-warning mb-0" id="modalTotalDuration">0s</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-info">
+                                <div class="card-body text-center">
+                                    <h6 class="text-muted">Cập nhật</h6>
+                                    <h6 class="text-info mb-0">
+                                        <i class="bi bi-arrow-clockwise" id="autoRefreshIcon"></i>
+                                        <span id="lastUpdateTime">-</span>
+                                    </h6>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Thời gian rời</th>
+                                    <th>Thời gian quay lại</th>
+                                    <th>Thời lượng</th>
+                                    <th>Bài thi</th>
+                                    <th>Loại vi phạm</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modalViolationsTableBody">
+                                <tr>
+                                    <td colspan="5" class="text-center">
+                                        <div class="spinner-border spinner-border-sm" role="status"></div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/admin-exam-violations.js"></script>
+    <script>
+        // Mobile menu toggle
+        const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+        function toggleSidebar() {
+            sidebar.classList.toggle('show');
+            sidebarOverlay.classList.toggle('show');
+        }
+
+        mobileMenuToggle.addEventListener('click', toggleSidebar);
+        sidebarOverlay.addEventListener('click', toggleSidebar);
+
+        // Close sidebar when clicking on a link (mobile only)
+        if (window.innerWidth < 768) {
+            const sidebarLinks = sidebar.querySelectorAll('.nav-link');
+            sidebarLinks.forEach(link => {
+                link.addEventListener('click', () => {
+                    sidebar.classList.remove('show');
+                    sidebarOverlay.classList.remove('show');
+                });
+            });
+        }
+
+        // Logout handler
+        document.getElementById('logoutBtn')?.addEventListener('click', async (e) => {
+            e.preventDefault();
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+                window.location.href = '/login.html';
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        });
+    </script>
+</body>
+</html>
+
