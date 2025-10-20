@@ -10,9 +10,11 @@
     let tabLeftTime = null;
     let violationAlertShown = false;
     let focusCheckInterval = null;
+    let examTimeCheckInterval = null; // Check if exam has ended
     let lastFocusCheck = Date.now();
     let currentExamId = null;
     let currentExamTitle = null;
+    let currentExamEndTime = null; // Store exam end time
     let pageJustLoaded = true; // Flag to prevent false positives on page load
     let lastBlurTime = 0; // Track last blur event to prevent duplicate triggers
 
@@ -20,6 +22,7 @@
     const STORAGE_KEY_MONITORING = 'exam_monitoring_active';
     const STORAGE_KEY_EXAM_ID = 'exam_monitoring_exam_id';
     const STORAGE_KEY_EXAM_TITLE = 'exam_monitoring_exam_title';
+    const STORAGE_KEY_EXAM_END_TIME = 'exam_monitoring_end_time';
 
     // SessionStorage keys (persist during browser session but not across tabs)
     const SESSION_KEY_FULLSCREEN_REQUESTED = 'exam_monitoring_fullscreen_requested';
@@ -30,10 +33,28 @@
         const storedMonitoring = localStorage.getItem(STORAGE_KEY_MONITORING);
         const storedExamId = localStorage.getItem(STORAGE_KEY_EXAM_ID);
         const storedExamTitle = localStorage.getItem(STORAGE_KEY_EXAM_TITLE);
+        const storedEndTime = localStorage.getItem(STORAGE_KEY_EXAM_END_TIME);
 
         if (storedMonitoring === 'true' && storedExamId) {
             currentExamId = storedExamId;
             currentExamTitle = storedExamTitle || 'Kỳ thi';
+            currentExamEndTime = storedEndTime;
+
+            // Check if exam has already ended
+            if (currentExamEndTime) {
+                const now = new Date();
+                const endTime = new Date(currentExamEndTime);
+                if (now > endTime) {
+                    console.log('[EXAM-MONITOR] Exam has ended, not starting monitoring');
+                    // Clear monitoring data
+                    localStorage.removeItem(STORAGE_KEY_MONITORING);
+                    localStorage.removeItem(STORAGE_KEY_EXAM_ID);
+                    localStorage.removeItem(STORAGE_KEY_EXAM_TITLE);
+                    localStorage.removeItem(STORAGE_KEY_EXAM_END_TIME);
+                    return;
+                }
+            }
+
             startMonitoring();
         }
     }
@@ -66,6 +87,9 @@
         // Start periodic focus check
         startFocusCheck();
 
+        // Start periodic exam time check
+        startExamTimeCheck();
+
         // Request fullscreen mode (only once per session)
         requestFullscreenMode();
 
@@ -93,10 +117,14 @@
         document.removeEventListener('mouseleave', handleMouseLeave);
         document.removeEventListener('contextmenu', handleContextMenu);
 
-        // Clear interval
+        // Clear intervals
         if (focusCheckInterval) {
             clearInterval(focusCheckInterval);
             focusCheckInterval = null;
+        }
+        if (examTimeCheckInterval) {
+            clearInterval(examTimeCheckInterval);
+            examTimeCheckInterval = null;
         }
 
         // Exit fullscreen if active
@@ -110,6 +138,7 @@
         localStorage.removeItem(STORAGE_KEY_MONITORING);
         localStorage.removeItem(STORAGE_KEY_EXAM_ID);
         localStorage.removeItem(STORAGE_KEY_EXAM_TITLE);
+        localStorage.removeItem(STORAGE_KEY_EXAM_END_TIME);
 
         // Clear sessionStorage
         sessionStorage.removeItem('monitoring_warning_shown');
@@ -138,6 +167,29 @@
             }
             lastFocusCheck = Date.now();
         }, 2000); // Check every 2 seconds (reduced frequency)
+    }
+
+    // Start periodic exam time check
+    function startExamTimeCheck() {
+        if (examTimeCheckInterval) return;
+        if (!currentExamEndTime) return; // No end time set
+
+        examTimeCheckInterval = setInterval(() => {
+            if (!monitoringActive) return;
+
+            const now = new Date();
+            const endTime = new Date(currentExamEndTime);
+
+            if (now > endTime) {
+                console.log('[EXAM-MONITOR] Exam time has ended, stopping monitoring');
+                stopMonitoring();
+
+                // Show notification
+                if (typeof showToast === 'function') {
+                    showToast('info', 'Kỳ thi đã kết thúc', 'Hệ thống giám sát đã dừng');
+                }
+            }
+        }, 10000); // Check every 10 seconds
     }
 
     // Handle visibility change
@@ -394,14 +446,18 @@
     // Public API
     window.ExamMonitoring = {
         // Enable monitoring for an exam
-        enable: function(examId, examTitle) {
+        enable: function(examId, examTitle, examEndTime) {
             currentExamId = examId;
             currentExamTitle = examTitle || 'Kỳ thi';
+            currentExamEndTime = examEndTime; // Store exam end time
 
             // Save to localStorage
             localStorage.setItem(STORAGE_KEY_MONITORING, 'true');
             localStorage.setItem(STORAGE_KEY_EXAM_ID, examId);
             localStorage.setItem(STORAGE_KEY_EXAM_TITLE, currentExamTitle);
+            if (examEndTime) {
+                localStorage.setItem(STORAGE_KEY_EXAM_END_TIME, examEndTime);
+            }
 
             startMonitoring();
         },

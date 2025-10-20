@@ -55,7 +55,9 @@ async function loadExamDetails() {
             // Enable monitoring if exam has prevent_tab_switch enabled
             if (currentExam.prevent_tab_switch && window.ExamMonitoring) {
                 console.log('[EXAM-VIEW] Enabling monitoring for exam:', currentExam.id);
-                window.ExamMonitoring.enable(currentExam.id, currentExam.title);
+                // Pass exam end time so monitoring can auto-stop when exam ends
+                const endTime = currentExam.end_time ? (currentExam.end_time + 'Z') : null;
+                window.ExamMonitoring.enable(currentExam.id, currentExam.title, endTime);
             }
         } else {
             showAlert(data.message || 'Không thể tải thông tin kỳ thi', 'danger');
