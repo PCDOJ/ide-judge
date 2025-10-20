@@ -13,7 +13,8 @@ services:
       - "2310:3306"
     volumes:
       - mariadb_data:/var/lib/mysql
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./migrations:/docker-entrypoint-initdb.d/migrations
     networks:
       - ide-judge-network
     healthcheck:
