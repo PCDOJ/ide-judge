@@ -39,17 +39,18 @@ Khi admin click nút "Tải xuống" trong modal xem code:
 Khi admin click "Tải ZIP tất cả bài làm":
 - Hệ thống tạo folder cho mỗi thí sinh
 - Mỗi file code có extension đúng theo ngôn ngữ
+- **Hỗ trợ tiếng Việt có dấu** trong tên folder và tên file ZIP
 - Cấu trúc: `{Tên_kỳ_thi}_submissions.zip`
   ```
-  Ky_thi_giua_ky_submissions.zip
-  ├── Nguyen_Van_A/
+  Kỳ_thi_giữa_kỳ_submissions.zip
+  ├── Nguyễn_Văn_A/
   │   ├── Bai01.cpp
   │   ├── Bai02.py
   │   └── Bai03.java
-  ├── Tran_Thi_B/
+  ├── Trần_Thị_B/
   │   ├── Bai01.cpp
   │   └── Bai02.cpp
-  └── Le_Van_C/
+  └── Lê_Văn_C/
       ├── Bai01.py
       └── Bai02.js
   ```
@@ -89,8 +90,9 @@ Khi admin click "Tải ZIP tất cả bài làm":
    - Hàm `downloadCode()`: Sử dụng extension đúng khi tạo file
 
 2. **routes/exam.js**
+   - Hàm `sanitizeFilename(name)`: Xử lý tên file/folder an toàn, giữ tiếng Việt
    - Hàm `getFileExtension(languageId)`: Mapping language_id → extension (backend)
-   - Route `/admin/exams/:examId/download-zip`: Tạo ZIP với extension đúng
+   - Route `/admin/exams/:examId/download-zip`: Tạo ZIP với extension đúng và tên tiếng Việt
 
 ### Code mẫu:
 
@@ -123,21 +125,37 @@ function downloadCode() {
 
 ```javascript
 // Backend (exam.js)
+
+// Helper function to sanitize filename/foldername while keeping Vietnamese characters
+function sanitizeFilename(name) {
+    // Chỉ loại bỏ các ký tự không hợp lệ trong tên file/folder
+    // Giữ lại: chữ cái (bao gồm tiếng Việt), số, khoảng trắng, dấu gạch ngang, dấu gạch dưới
+    return name
+        .replace(/[<>:"/\\|?*]/g, '') // Loại bỏ ký tự đặc biệt không hợp lệ
+        .replace(/\s+/g, '_')          // Thay khoảng trắng bằng dấu gạch dưới
+        .replace(/_+/g, '_')           // Loại bỏ dấu gạch dưới trùng lặp
+        .trim();
+}
+
 router.get('/admin/exams/:examId/download-zip', isAdmin, async (req, res) => {
     // ... get submissions from database
-    
+
+    // Set response headers - Giữ tiếng Việt trong tên file ZIP
+    const zipFilename = `${sanitizeFilename(exam.title)}_submissions.zip`;
+    res.attachment(zipFilename);
+
     studentMap.forEach((student, userId) => {
-        const folderName = student.fullname.replace(/[^a-zA-Z0-9]/g, '_');
-        
+        const folderName = sanitizeFilename(student.fullname); // Giữ tiếng Việt
+
         student.submissions.forEach(sub => {
             const ext = getFileExtension(sub.language_id);
             const filename = `${folderName}/${sub.problem_code}${ext}`;
             const content = sub.source_code || '// No code';
-            
+
             archive.append(content, { name: filename });
         });
     });
-    
+
     archive.finalize();
 });
 ```
@@ -162,6 +180,20 @@ router.get('/admin/exams/:examId/download-zip', isAdmin, async (req, res) => {
    - File có thể mở bằng IDE phù hợp
 
 ## 📅 Changelog
+
+### Version 1.2.0 - 2025-10-20
+
+**Added:**
+- ✅ Hỗ trợ tiếng Việt có dấu trong tên folder và tên file ZIP
+- ✅ Hàm `sanitizeFilename()` để xử lý tên file an toàn
+
+**Changed:**
+- ✅ Cập nhật logic tạo tên folder: giữ tiếng Việt thay vì chuyển thành `_`
+- ✅ Cập nhật logic tạo tên file ZIP: giữ tiếng Việt
+
+**Example:**
+- Trước: `Ky_thi_giua_ky_submissions.zip` → `Nguyen_Van_A/`
+- Sau: `Kỳ_thi_giữa_kỳ_submissions.zip` → `Nguyễn_Văn_A/`
 
 ### Version 1.1.0 - 2025-10-20
 
