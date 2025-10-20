@@ -63,156 +63,42 @@ run_migrations() {
     echo ""
     echo "Running database migrations and checks..."
 
-    # 1. Check and create users table
+    # Note: init.sql is automatically run by MariaDB on first startup via docker-entrypoint-initdb.d
+    # This function only handles additional migrations and schema updates
+
+    # Run fix migration for code_submissions if needed
+    if [ -f "/app/migrations/02-fix_code_submissions_schema.sql" ]; then
+        echo "  Running code_submissions schema fix migration..."
+        mysql -h "${DB_HOST}" -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" < /app/migrations/02-fix_code_submissions_schema.sql 2>&1 | grep -v "Warning: Using a password" | grep -v "already exists" || true
+        echo "  ✓ Code submissions schema migration completed"
+    fi
+
+    # Verify critical tables exist
+    echo "  Verifying critical tables..."
+
     if table_exists "users"; then
         echo "  ✓ Table 'users' exists"
     else
-        echo "  1. Creating users table..."
-        mysql -h "${DB_HOST}" -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" <<EOF
-CREATE TABLE IF NOT EXISTS users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    fullname VARCHAR(100) NOT NULL,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    email VARCHAR(100) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    role ENUM('user', 'admin') DEFAULT 'user',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-INSERT INTO users (fullname, username, email, password, role)
-VALUES ('Administrator', 'admin', 'admin@example.com', '\$2a\$10\$mBCmkEgliZQPjaHrWKDrk.tHcKLinI78IGhh8KvBMNycgh1bgotB2', 'admin')
-ON DUPLICATE KEY UPDATE username=username;
-EOF
-        echo "  ✓ Users table created"
+        echo "  ❌ Table 'users' missing! Database initialization may have failed."
+        echo "  Please check MariaDB logs: docker-compose logs mariadb"
+        exit 1
     fi
 
-    # 2. Check and create exams table
-    if table_exists "exams"; then
-        echo "  ✓ Table 'exams' exists"
-
-        # Check if has_access_code column exists
-        if column_exists "exams" "has_access_code"; then
-            echo "    ✓ Column 'has_access_code' exists"
-        else
-            echo "    2a. Adding 'has_access_code' column..."
-            mysql -h "${DB_HOST}" -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" <<EOF
-ALTER TABLE exams ADD COLUMN has_access_code BOOLEAN NOT NULL DEFAULT FALSE AFTER access_code;
-UPDATE exams SET has_access_code = TRUE WHERE access_code IS NOT NULL AND access_code != '';
-EOF
-            echo "    ✓ Column 'has_access_code' added"
-        fi
-    else
-        echo "  2. Creating exams table..."
-        mysql -h "${DB_HOST}" -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" <<EOF
-CREATE TABLE IF NOT EXISTS exams (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    start_time DATETIME NOT NULL,
-    end_time DATETIME NOT NULL,
-    access_code VARCHAR(50) DEFAULT NULL,
-    has_access_code BOOLEAN NOT NULL DEFAULT FALSE,
-    created_by INT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX idx_start_time (start_time),
-    INDEX idx_end_time (end_time)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-EOF
-        echo "  ✓ Exams table created"
-    fi
-
-    # 3. Check and create exam_problems table
-    if table_exists "exam_problems"; then
-        echo "  ✓ Table 'exam_problems' exists"
-    else
-        echo "  3. Creating exam_problems table..."
-        mysql -h "${DB_HOST}" -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" <<EOF
-CREATE TABLE IF NOT EXISTS exam_problems (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    exam_id INT NOT NULL,
-    problem_code VARCHAR(50) NOT NULL,
-    problem_title VARCHAR(255) NOT NULL,
-    pdf_filename VARCHAR(255) NOT NULL,
-    pdf_path VARCHAR(500) NOT NULL,
-    points DECIMAL(5,2) NOT NULL DEFAULT 0,
-    display_order INT NOT NULL DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
-    UNIQUE KEY unique_problem_code (exam_id, problem_code),
-    INDEX idx_exam_id (exam_id),
-    INDEX idx_display_order (display_order)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-EOF
-        echo "  ✓ Exam_problems table created"
-    fi
-
-    # 4. Check and create exam_registrations table
-    if table_exists "exam_registrations"; then
-        echo "  ✓ Table 'exam_registrations' exists"
-    else
-        echo "  4. Creating exam_registrations table..."
-        mysql -h "${DB_HOST}" -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" <<EOF
-CREATE TABLE IF NOT EXISTS exam_registrations (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    exam_id INT NOT NULL,
-    user_id INT NOT NULL,
-    registration_type ENUM('pre_registered', 'joined', 'left') NOT NULL DEFAULT 'pre_registered',
-    joined_at DATETIME DEFAULT NULL,
-    left_at DATETIME DEFAULT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE KEY unique_user_exam (exam_id, user_id),
-    INDEX idx_exam_id (exam_id),
-    INDEX idx_user_id (user_id),
-    INDEX idx_registration_type (registration_type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-EOF
-        echo "  ✓ Exam_registrations table created"
-    fi
-
-    # 5. Check and create code_submissions table
     if table_exists "code_submissions"; then
         echo "  ✓ Table 'code_submissions' exists"
     else
-        echo "  5. Creating code_submissions table..."
-        mysql -h "${DB_HOST}" -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" <<EOF
-CREATE TABLE IF NOT EXISTS code_submissions (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    exam_id INT NOT NULL,
-    problem_id INT NOT NULL,
-    user_id INT NOT NULL,
-    source_code TEXT NOT NULL,
-    language_id INT NOT NULL,
-    judge0_token VARCHAR(100),
-    status VARCHAR(50) DEFAULT 'pending',
-    score DECIMAL(5,2) DEFAULT 0,
-    execution_time DECIMAL(10,3),
-    memory_used INT,
-    compile_output TEXT,
-    stdout TEXT,
-    stderr TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
-    FOREIGN KEY (problem_id) REFERENCES exam_problems(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX idx_exam_id (exam_id),
-    INDEX idx_problem_id (problem_id),
-    INDEX idx_user_id (user_id),
-    INDEX idx_status (status),
-    INDEX idx_created_at (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-EOF
-        echo "  ✓ Code_submissions table created"
+        echo "  ❌ Table 'code_submissions' missing! Database initialization may have failed."
+        exit 1
     fi
 
-    echo "✓ All database tables verified and created!"
+    if table_exists "submission_history"; then
+        echo "  ✓ Table 'submission_history' exists"
+    else
+        echo "  ❌ Table 'submission_history' missing! Database initialization may have failed."
+        exit 1
+    fi
+
+    echo "✓ All database tables verified!"
 }
 
 # Function to wait for Judge0
@@ -248,11 +134,17 @@ echo "Step 2: Running migrations..."
 run_migrations
 
 echo ""
-echo "Step 3: Checking Judge0 availability..."
+echo "Step 3: Creating required directories..."
+# Create uploads directory if not exists
+mkdir -p /app/uploads/exam-pdfs
+echo "✓ Uploads directory created/verified"
+
+echo ""
+echo "Step 4: Checking Judge0 availability..."
 wait_for_judge0 &
 
 echo ""
-echo "Step 4: Starting Node.js application..."
+echo "Step 5: Starting Node.js application..."
 echo "========================================="
 echo ""
 
