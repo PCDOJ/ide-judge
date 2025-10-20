@@ -698,6 +698,17 @@ router.get('/admin/exams/:examId/submissions', isAdmin, async (req, res) => {
     }
 });
 
+// Helper function to sanitize filename/foldername while keeping Vietnamese characters
+function sanitizeFilename(name) {
+    // Chỉ loại bỏ các ký tự không hợp lệ trong tên file/folder
+    // Giữ lại: chữ cái (bao gồm tiếng Việt), số, khoảng trắng, dấu gạch ngang, dấu gạch dưới
+    return name
+        .replace(/[<>:"/\\|?*]/g, '') // Loại bỏ ký tự đặc biệt không hợp lệ
+        .replace(/\s+/g, '_')          // Thay khoảng trắng bằng dấu gạch dưới
+        .replace(/_+/g, '_')           // Loại bỏ dấu gạch dưới trùng lặp
+        .trim();
+}
+
 // Download all submissions as ZIP (Admin)
 router.get('/admin/exams/:examId/download-zip', isAdmin, async (req, res) => {
     try {
@@ -735,8 +746,8 @@ router.get('/admin/exams/:examId/download-zip', isAdmin, async (req, res) => {
             zlib: { level: 9 } // Maximum compression
         });
 
-        // Set response headers
-        const zipFilename = `${exam.title.replace(/[^a-zA-Z0-9]/g, '_')}_submissions.zip`;
+        // Set response headers - Giữ tiếng Việt trong tên file ZIP
+        const zipFilename = `${sanitizeFilename(exam.title)}_submissions.zip`;
         res.attachment(zipFilename);
         res.setHeader('Content-Type', 'application/zip');
 
@@ -755,9 +766,9 @@ router.get('/admin/exams/:examId/download-zip', isAdmin, async (req, res) => {
             studentMap.get(sub.user_id).submissions.push(sub);
         });
 
-        // Add files to archive
+        // Add files to archive - Giữ tiếng Việt trong tên folder
         studentMap.forEach((student, userId) => {
-            const folderName = student.fullname.replace(/[^a-zA-Z0-9]/g, '_');
+            const folderName = sanitizeFilename(student.fullname);
 
             student.submissions.forEach(sub => {
                 const ext = getFileExtension(sub.language_id);
