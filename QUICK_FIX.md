@@ -8,7 +8,20 @@ Database thiếu các bảng exam hoặc thiếu cột `has_access_code`
 
 ## ✅ Giải Pháp Nhanh (Cho Server Đang Chạy)
 
-### Bước 1: Chạy Script Sửa Database
+### Cách 1: Restart Web Service (Khuyến Nghị - Tự Động)
+
+```bash
+# Restart web service - docker-entrypoint.sh sẽ tự động kiểm tra và tạo bảng
+docker-compose restart web
+```
+
+**Lý do:** `docker-entrypoint.sh` đã được cập nhật với logic tự động:
+- ✅ Kiểm tra tất cả các bảng cần thiết
+- ✅ Tạo các bảng thiếu (nếu có)
+- ✅ Thêm cột `has_access_code` vào bảng `exams` (nếu thiếu)
+- ✅ Không làm gì nếu bảng đã tồn tại
+
+### Cách 2: Chạy Script Thủ Công (Nếu Cần)
 
 ```bash
 # Cấp quyền thực thi
@@ -16,28 +29,31 @@ chmod +x scripts/fix-database.sh
 
 # Chạy script
 ./scripts/fix-database.sh
-```
 
-Script này sẽ:
-- ✅ Kiểm tra tất cả các bảng cần thiết
-- ✅ Tạo các bảng thiếu (nếu có)
-- ✅ Thêm cột `has_access_code` vào bảng `exams` (nếu thiếu)
-- ✅ Hiển thị danh sách bảng hiện có
-
-### Bước 2: Restart Web Service
-
-```bash
+# Restart web service
 docker-compose restart web
 ```
 
 ### Bước 3: Kiểm Tra
 
 ```bash
-# Kiểm tra logs
-docker-compose logs -f web
+# Kiểm tra logs (xem quá trình tự động tạo bảng)
+docker-compose logs web | grep -A 20 "Running database migrations"
 
 # Kiểm tra API
 curl http://localhost:2308/api/admin/exams
+```
+
+**Kết quả mong đợi trong logs:**
+```
+Running database migrations and checks...
+  ✓ Table 'users' exists
+  ✓ Table 'exams' exists
+    ✓ Column 'has_access_code' exists
+  ✓ Table 'exam_problems' exists
+  ✓ Table 'exam_registrations' exists
+  ✓ Table 'code_submissions' exists
+✓ All database tables verified and created!
 ```
 
 ---

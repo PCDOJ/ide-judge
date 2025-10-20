@@ -6,11 +6,12 @@
 1. ❌ File `init.sql` chỉ tạo bảng `users`, không tạo các bảng exam
 2. ❌ Docker-compose không mount thư mục migrations vào MariaDB
 3. ❌ Script `migrate.sh` sử dụng password cứng thay vì biến môi trường
+4. ❌ Bảng `exams` thiếu cột `has_access_code`
 
 ### Giải pháp đã áp dụng:
 1. ✅ Cập nhật `init.sql` để bao gồm TẤT CẢ các bảng cần thiết:
    - `users` - Quản lý người dùng
-   - `exams` - Quản lý kỳ thi
+   - `exams` - Quản lý kỳ thi (bao gồm cột `has_access_code`)
    - `exam_problems` - Quản lý bài thi trong kỳ thi
    - `exam_registrations` - Quản lý đăng ký tham gia kỳ thi
    - `code_submissions` - Quản lý bài nộp code
@@ -23,6 +24,12 @@
    ```
 
 3. ✅ Cập nhật `migrate.sh` để sử dụng biến môi trường `DB_PASSWORD`
+
+4. ✅ **Cập nhật `docker-entrypoint.sh` với logic tự động kiểm tra và tạo bảng:**
+   - Tự động kiểm tra từng bảng khi khởi động
+   - Tạo bảng nếu chưa tồn tại
+   - Thêm cột `has_access_code` nếu bảng `exams` thiếu cột này
+   - **Không cần chạy script thủ công, mọi thứ tự động khi build/restart!**
 
 ---
 
@@ -130,6 +137,12 @@ Script `start.sh` sẽ tự động:
 3. Build và khởi động tất cả services
 4. Chờ services sẵn sàng
 5. Hiển thị trạng thái và thông tin truy cập
+
+**🎯 Điểm Quan Trọng:**
+- `docker-entrypoint.sh` sẽ **TỰ ĐỘNG** kiểm tra và tạo tất cả bảng khi container khởi động
+- Không cần chạy migration thủ công
+- Nếu bảng đã tồn tại, sẽ bỏ qua
+- Nếu thiếu cột `has_access_code`, sẽ tự động thêm
 
 ### Bước 6: Kiểm Tra Database Đã Được Khởi Tạo
 
