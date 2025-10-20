@@ -12,6 +12,18 @@ async function checkExamAccess(userId, examId) {
     return registrations.length > 0;
 }
 
+// Helper function to parse datetime string to Date object (UTC)
+function parseDateTime(datetimeStr) {
+    // Input: "2025-10-19 08:00:00" (from database, stored as UTC)
+    const dateStr = datetimeStr.toString().replace('T', ' ').substring(0, 19);
+    const [datePart, timePart] = dateStr.split(' ');
+    const [year, month, day] = datePart.split('-');
+    const [hours, minutes, seconds] = timePart.split(':');
+
+    // Create Date object in UTC
+    return new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds || 0));
+}
+
 // Helper function to check if exam is ongoing
 // gracePeriodSeconds: allow operations for X seconds after exam ends (for auto-submit)
 async function isExamOngoing(examId, gracePeriodSeconds = 0) {
@@ -19,8 +31,9 @@ async function isExamOngoing(examId, gracePeriodSeconds = 0) {
     if (exams.length === 0) return false;
 
     const now = new Date();
-    const start = new Date(exams[0].start_time);
-    const end = new Date(exams[0].end_time);
+    // Parse datetime strings as UTC to avoid timezone issues
+    const start = parseDateTime(exams[0].start_time);
+    const end = parseDateTime(exams[0].end_time);
 
     // Add grace period to end time
     const endWithGrace = new Date(end.getTime() + (gracePeriodSeconds * 1000));
