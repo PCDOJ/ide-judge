@@ -13,15 +13,19 @@ async function checkExamAccess(userId, examId) {
 }
 
 // Helper function to check if exam is ongoing
-async function isExamOngoing(examId) {
+// gracePeriodSeconds: allow operations for X seconds after exam ends (for auto-submit)
+async function isExamOngoing(examId, gracePeriodSeconds = 0) {
     const [exams] = await db.query('SELECT start_time, end_time FROM exams WHERE id = ?', [examId]);
     if (exams.length === 0) return false;
-    
+
     const now = new Date();
     const start = new Date(exams[0].start_time);
     const end = new Date(exams[0].end_time);
-    
-    return now >= start && now <= end;
+
+    // Add grace period to end time
+    const endWithGrace = new Date(end.getTime() + (gracePeriodSeconds * 1000));
+
+    return now >= start && now <= endWithGrace;
 }
 
 // Save or update code (auto-save)
@@ -46,8 +50,8 @@ router.post('/save', isAuthenticated, async (req, res) => {
             });
         }
 
-        // Check if exam is ongoing
-        const ongoing = await isExamOngoing(exam_id);
+        // Check if exam is ongoing (with 30 second grace period for auto-submit)
+        const ongoing = await isExamOngoing(exam_id, 30);
         if (!ongoing) {
             return res.status(400).json({
                 success: false,
