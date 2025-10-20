@@ -50,6 +50,7 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
+      - uploads_data:/app/uploads
     networks:
       - ide-judge-network
     healthcheck:
@@ -116,4 +117,5 @@ volumes:
   mariadb_data:
   judge0-db-data:
   judge0-redis-data:
+  uploads_data:
 
