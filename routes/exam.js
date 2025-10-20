@@ -780,17 +780,47 @@ router.get('/admin/exams/:examId/download-zip', isAdmin, async (req, res) => {
 // Helper function to get file extension based on language ID
 function getFileExtension(languageId) {
     const extensions = {
-        50: '.c',      // C
-        54: '.cpp',    // C++
-        71: '.py',     // Python
-        62: '.java',   // Java
-        63: '.js',     // JavaScript
-        51: '.cs',     // C#
-        60: '.go',     // Go
-        68: '.php',    // PHP
-        72: '.rb',     // Ruby
-        73: '.rs',     // Rust
-        74: '.ts'      // TypeScript
+        // C/C++
+        50: '.c',       // C (GCC 9.2.0)
+        75: '.c',       // C (Clang 7.0.1)
+        103: '.c',      // C (GCC 14.1.0)
+        54: '.cpp',     // C++ (GCC 9.2.0)
+        76: '.cpp',     // C++ (Clang 7.0.1)
+        105: '.cpp',    // C++ (GCC 14.1.0)
+
+        // Python
+        71: '.py',      // Python (3.8.1)
+        25: '.py',      // Python for ML (3.11.2)
+
+        // Java
+        62: '.java',    // Java (OpenJDK 13.0.1)
+        91: '.java',    // Java (JDK 17.0.6)
+
+        // JavaScript/TypeScript
+        63: '.js',      // JavaScript (Node.js 12.14.0)
+        102: '.js',     // JavaScript (Node.js 22.08.0)
+        74: '.ts',      // TypeScript (3.7.4)
+        101: '.ts',     // TypeScript (5.6.2)
+
+        // C#
+        51: '.cs',      // C# (Mono 6.6.0.161)
+        29: '.cs',      // C# (.NET Core SDK 7.0.400)
+
+        // Other languages
+        45: '.asm',     // Assembly (NASM 2.14.02)
+        46: '.sh',      // Bash (5.0.0)
+        60: '.go',      // Go (1.13.5)
+        95: '.go',      // Go (1.18.5)
+        64: '.lua',     // Lua (5.3.5)
+        67: '.pas',     // Pascal (FPC 3.0.4)
+        68: '.php',     // PHP (7.4.1)
+        98: '.php',     // PHP (8.3.11)
+        99: '.r',       // R (4.4.1)
+        72: '.rb',      // Ruby (2.7.0)
+        73: '.rs',      // Rust (1.40.0)
+        81: '.scala',   // Scala (2.13.2)
+        83: '.swift',   // Swift (5.2.3)
+        43: '.txt'      // Plain Text
     };
     return extensions[languageId] || '.txt';
 }
