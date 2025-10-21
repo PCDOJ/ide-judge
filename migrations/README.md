@@ -12,7 +12,9 @@ Thư mục này chứa các migration files để cập nhật database schema.
 4. `add_has_access_code_field.sql` - Thêm cột has_access_code vào exams
 5. `03-add_prevent_tab_switch.sql` - Thêm cột prevent_tab_switch vào exams
 6. `04-add_exam_tab_violations.sql` - Tạo bảng exam_tab_violations
-7. `run-all-migrations.sql` - Script tổng hợp chạy tất cả migrations
+7. `05-update_violation_types.sql` - Cập nhật các loại vi phạm
+8. `06-add_exam_notifications.sql` - Tạo bảng exam_notifications (Thông báo từ admin)
+9. `run-all-migrations.sql` - Script tổng hợp chạy tất cả migrations
 
 ## Cách chạy Migrations
 
@@ -33,6 +35,7 @@ Nếu database đã tồn tại, bạn cần chạy migrations thủ công:
 # Chạy từng migration
 docker exec -i ide-judge-mariadb mariadb -uroot -p${DB_PASSWORD} ide_judge_db < migrations/03-add_prevent_tab_switch.sql
 docker exec -i ide-judge-mariadb mariadb -uroot -p${DB_PASSWORD} ide_judge_db < migrations/04-add_exam_tab_violations.sql
+docker exec -i ide-judge-mariadb mariadb -uroot -p${DB_PASSWORD} ide_judge_db < migrations/06-add_exam_notifications.sql
 ```
 
 Hoặc sử dụng script helper:
@@ -53,11 +56,15 @@ docker exec ide-judge-mariadb mariadb -uroot -p${DB_PASSWORD} ide_judge_db -e "D
 
 # Kiểm tra bảng exam_tab_violations
 docker exec ide-judge-mariadb mariadb -uroot -p${DB_PASSWORD} ide_judge_db -e "DESCRIBE exam_tab_violations;"
+
+# Kiểm tra bảng exam_notifications
+docker exec ide-judge-mariadb mariadb -uroot -p${DB_PASSWORD} ide_judge_db -e "DESCRIBE exam_notifications;"
 ```
 
 Kết quả mong đợi:
 - Bảng `exams` có cột `prevent_tab_switch` (BOOLEAN)
 - Bảng `exam_tab_violations` tồn tại với các cột: id, exam_id, user_id, problem_id, left_at, returned_at, duration_seconds, violation_type
+- Bảng `exam_notifications` tồn tại với các cột: id, exam_id, message, created_by, is_active, created_at, updated_at
 
 ## Rollback
 
