@@ -550,6 +550,63 @@ router.post('/user/exams/:examId/leave', isAuthenticated, async (req, res) => {
     }
 });
 
+// Check monitoring status (for tab switch prevention)
+router.get('/user/exams/:examId/monitoring-status', isAuthenticated, async (req, res) => {
+    try {
+        const examId = req.params.examId;
+        const userId = req.session.userId;
+
+        // Get exam
+        const [exams] = await db.query('SELECT * FROM exams WHERE id = ?', [examId]);
+        if (exams.length === 0) {
+            return res.status(404).json({
+                success: false,
+                shouldMonitor: false,
+                reason: 'Exam not found'
+            });
+        }
+
+        const exam = exams[0];
+        const status = getExamStatus(exam.start_time, exam.end_time);
+
+        // Check registration
+        const [registrations] = await db.query(
+            'SELECT * FROM exam_registrations WHERE exam_id = ? AND user_id = ?',
+            [examId, userId]
+        );
+
+        // Monitoring should be active only if:
+        // 1. User is joined (registration_type = 'joined')
+        // 2. Exam is ongoing
+        // 3. Exam has prevent_tab_switch enabled
+        const isJoined = registrations.length > 0 && registrations[0].registration_type === 'joined';
+        const isOngoing = status === 'ongoing';
+        const hasPreventTabSwitch = exam.prevent_tab_switch === 1;
+
+        const shouldMonitor = isJoined && isOngoing && hasPreventTabSwitch;
+
+        let reason = '';
+        if (!isJoined) reason = 'User not joined';
+        else if (!isOngoing) reason = `Exam ${status}`;
+        else if (!hasPreventTabSwitch) reason = 'Tab switch prevention disabled';
+
+        res.json({
+            success: true,
+            shouldMonitor,
+            reason,
+            examStatus: status,
+            registrationType: registrations.length > 0 ? registrations[0].registration_type : null
+        });
+    } catch (error) {
+        console.error('Check monitoring status error:', error);
+        res.status(500).json({
+            success: false,
+            shouldMonitor: false,
+            reason: 'Server error'
+        });
+    }
+});
+
 // Get exam details and problems (for joined users or ended exams)
 router.get('/user/exams/:examId', isAuthenticated, async (req, res) => {
     try {

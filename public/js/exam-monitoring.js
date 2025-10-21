@@ -10,13 +10,14 @@
     let tabLeftTime = null;
     let violationAlertShown = false;
     let focusCheckInterval = null;
-    let examTimeCheckInterval = null; // Check if exam has ended
+    let examTimeCheckInterval = null;
+    let validationCheckInterval = null; // NEW: Check monitoring conditions periodically
     let lastFocusCheck = Date.now();
     let currentExamId = null;
     let currentExamTitle = null;
-    let currentExamEndTime = null; // Store exam end time
-    let pageJustLoaded = true; // Flag to prevent false positives on page load
-    let lastBlurTime = 0; // Track last blur event to prevent duplicate triggers
+    let currentExamEndTime = null;
+    let pageJustLoaded = true;
+    let lastBlurTime = 0;
 
     // LocalStorage keys
     const STORAGE_KEY_MONITORING = 'exam_monitoring_active';
@@ -26,6 +27,51 @@
 
     // SessionStorage keys (persist during browser session but not across tabs)
     const SESSION_KEY_FULLSCREEN_REQUESTED = 'exam_monitoring_fullscreen_requested';
+
+    /**
+     * Validate monitoring conditions (user joined + exam ongoing)
+     */
+    async function validateMonitoringConditions() {
+        if (!currentExamId) {
+            return { shouldMonitor: false, reason: 'No exam ID' };
+        }
+
+        try {
+            const response = await fetch(`/api/user/exams/${currentExamId}/monitoring-status`);
+            const data = await response.json();
+
+            console.log('[EXAM-MONITOR] Validation check:', data);
+            return data;
+        } catch (error) {
+            console.error('[EXAM-MONITOR] Validation error:', error);
+            return { shouldMonitor: false, reason: 'Validation failed' };
+        }
+    }
+
+    /**
+     * Clear monitoring data from storage
+     */
+    function clearMonitoringData() {
+        localStorage.removeItem(STORAGE_KEY_MONITORING);
+        localStorage.removeItem(STORAGE_KEY_EXAM_ID);
+        localStorage.removeItem(STORAGE_KEY_EXAM_TITLE);
+        localStorage.removeItem(STORAGE_KEY_EXAM_END_TIME);
+    }
+
+    /**
+     * Validate and start monitoring if conditions are met
+     */
+    async function validateAndStartMonitoring() {
+        const validation = await validateMonitoringConditions();
+
+        if (validation.shouldMonitor) {
+            console.log('[EXAM-MONITOR] Conditions met, starting monitoring');
+            startMonitoring();
+        } else {
+            console.log('[EXAM-MONITOR] Conditions not met:', validation.reason);
+            clearMonitoringData();
+        }
+    }
 
     // Initialize monitoring on page load
     function init() {
@@ -40,22 +86,8 @@
             currentExamTitle = storedExamTitle || 'Kỳ thi';
             currentExamEndTime = storedEndTime;
 
-            // Check if exam has already ended
-            if (currentExamEndTime) {
-                const now = new Date();
-                const endTime = new Date(currentExamEndTime);
-                if (now > endTime) {
-                    console.log('[EXAM-MONITOR] Exam has ended, not starting monitoring');
-                    // Clear monitoring data
-                    localStorage.removeItem(STORAGE_KEY_MONITORING);
-                    localStorage.removeItem(STORAGE_KEY_EXAM_ID);
-                    localStorage.removeItem(STORAGE_KEY_EXAM_TITLE);
-                    localStorage.removeItem(STORAGE_KEY_EXAM_END_TIME);
-                    return;
-                }
-            }
-
-            startMonitoring();
+            // Validate monitoring conditions before starting
+            validateAndStartMonitoring();
         }
     }
 
@@ -84,11 +116,10 @@
         document.addEventListener('mouseleave', handleMouseLeave);
         document.addEventListener('contextmenu', handleContextMenu);
 
-        // Start periodic focus check
+        // Start periodic checks
         startFocusCheck();
-
-        // Start periodic exam time check
         startExamTimeCheck();
+        startValidationCheck(); // NEW: Periodic validation of monitoring conditions
 
         // Request fullscreen mode (only once per session)
         requestFullscreenMode();
@@ -125,6 +156,10 @@
         if (examTimeCheckInterval) {
             clearInterval(examTimeCheckInterval);
             examTimeCheckInterval = null;
+        }
+        if (validationCheckInterval) {
+            clearInterval(validationCheckInterval);
+            validationCheckInterval = null;
         }
 
         // Exit fullscreen if active
@@ -190,6 +225,30 @@
                 }
             }
         }, 10000); // Check every 10 seconds
+    }
+
+    // NEW: Start periodic validation check (user joined + exam ongoing)
+    function startValidationCheck() {
+        if (validationCheckInterval) return;
+
+        validationCheckInterval = setInterval(async () => {
+            if (!monitoringActive) return;
+
+            const validation = await validateMonitoringConditions();
+
+            if (!validation.shouldMonitor) {
+                console.log('[EXAM-MONITOR] Validation failed:', validation.reason);
+                console.log('[EXAM-MONITOR] Stopping monitoring - conditions no longer met');
+                stopMonitoring();
+
+                // Show notification
+                if (typeof showToast === 'function') {
+                    showToast('warning', 'Giám sát đã dừng', validation.reason);
+                } else {
+                    alert(`⚠️ Hệ thống giám sát đã dừng\n\nLý do: ${validation.reason}`);
+                }
+            }
+        }, 15000); // Check every 15 seconds
     }
 
     // Handle visibility change
