@@ -96,6 +96,7 @@ run_migrations() {
     run_migration "/app/migrations/03-add_prevent_tab_switch.sql"
     run_migration "/app/migrations/04-add_exam_tab_violations.sql"
     run_migration "/app/migrations/05-update_violation_types.sql"
+    run_migration "/app/migrations/06-add_exam_notifications.sql"
 
     echo ""
     echo "  Verifying critical tables..."
@@ -167,6 +168,13 @@ EOF
         fi
     else
         echo "  ❌ Table 'exam_tab_violations' missing!"
+        exit 1
+    fi
+
+    if table_exists "exam_notifications"; then
+        echo "  ✓ Table 'exam_notifications' exists"
+    else
+        echo "  ❌ Table 'exam_notifications' missing!"
         exit 1
     fi
 
