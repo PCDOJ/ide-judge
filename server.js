@@ -10,6 +10,7 @@ const userRoutes = require('./routes/user');
 const adminRoutes = require('./routes/admin');
 const examRoutes = require('./routes/exam');
 const submissionRoutes = require('./routes/submission');
+const notificationRoutes = require('./routes/notification');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
 
 const app = express();
@@ -63,6 +64,7 @@ app.use('/api/user', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api', examRoutes);
 app.use('/api/submission', submissionRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Protected routes for HTML pages
 app.get('/index.html', requireAuth, (req, res) => {

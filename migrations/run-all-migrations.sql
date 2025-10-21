@@ -22,5 +22,11 @@ SOURCE /docker-entrypoint-initdb.d/migrations/03-add_prevent_tab_switch.sql;
 -- Migration 06: Add exam_tab_violations table (if not exists)
 SOURCE /docker-entrypoint-initdb.d/migrations/04-add_exam_tab_violations.sql;
 
+-- Migration 07: Update violation types (if not exists)
+SOURCE /docker-entrypoint-initdb.d/migrations/05-update_violation_types.sql;
+
+-- Migration 08: Add exam_notifications table (if not exists)
+SOURCE /docker-entrypoint-initdb.d/migrations/06-add_exam_notifications.sql;
+
 SELECT 'All migrations completed successfully!' AS status;
 

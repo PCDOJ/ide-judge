@@ -118,10 +118,13 @@ function renderExamsTable() {
                         <i class="bi bi-code-square"></i> Bài làm
                     </button>
                     ${exam.prevent_tab_switch ? `
-                    <button class="btn btn-sm btn-danger" onclick="window.location.href='/admin/exam-violations.html?id=${exam.id}'" title="Xem vi phạm thoát tab">
-                        <i class="bi bi-shield-exclamation"></i> Vi phạm
+                    <button class="btn btn-sm btn-danger" onclick="window.location.href='/admin/exam-violations.html?id=${exam.id}'" title="Xem lịch sử thoát tab">
+                        <i class="bi bi-shield-exclamation"></i> Thoát tab
                     </button>
                     ` : ''}
+                    <button class="btn btn-sm btn-primary" onclick="openSendNotificationModal(${exam.id}, '${exam.title.replace(/'/g, "\\'")}')">
+                        <i class="bi bi-megaphone"></i> Thông báo
+                    </button>
                     <button class="btn btn-sm btn-outline-primary" onclick="openEditModal(${exam.id})">
                         <i class="bi bi-pencil"></i>
                     </button>
@@ -417,5 +420,91 @@ function showAlert(message, type) {
     setTimeout(() => {
         alert.remove();
     }, 5000);
+}
+
+// Send notification modal
+let sendNotificationModal = null;
+let currentNotificationExamId = null;
+let currentNotificationExamTitle = null;
+
+// Initialize send notification modal
+document.addEventListener('DOMContentLoaded', () => {
+    const modalElement = document.getElementById('sendNotificationModal');
+    if (modalElement) {
+        sendNotificationModal = new bootstrap.Modal(modalElement);
+    }
+});
+
+// Open send notification modal
+function openSendNotificationModal(examId, examTitle) {
+    currentNotificationExamId = examId;
+    currentNotificationExamTitle = examTitle;
+
+    document.getElementById('notificationExamTitle').textContent = examTitle;
+    document.getElementById('notificationTitle').value = '';
+    document.getElementById('notificationContent').value = '';
+    document.getElementById('notificationError').classList.add('d-none');
+    document.getElementById('notificationSuccess').classList.add('d-none');
+
+    sendNotificationModal.show();
+}
+
+// Send notification to students
+async function sendNotificationToStudents() {
+    const title = document.getElementById('notificationTitle').value.trim();
+    const content = document.getElementById('notificationContent').value.trim();
+    const errorDiv = document.getElementById('notificationError');
+    const successDiv = document.getElementById('notificationSuccess');
+
+    // Hide previous messages
+    errorDiv.classList.add('d-none');
+    successDiv.classList.add('d-none');
+
+    // Validate
+    if (!title) {
+        errorDiv.textContent = 'Vui lòng nhập tiêu đề thông báo';
+        errorDiv.classList.remove('d-none');
+        return;
+    }
+
+    if (!content) {
+        errorDiv.textContent = 'Vui lòng nhập nội dung thông báo';
+        errorDiv.classList.remove('d-none');
+        return;
+    }
+
+    // Combine title and content
+    const message = `**${title}**\n\n${content}`;
+
+    try {
+        const response = await fetch(`/api/notifications/exams/${currentNotificationExamId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            successDiv.textContent = `✓ Đã gửi thông báo đến ${data.clientCount} thí sinh`;
+            successDiv.classList.remove('d-none');
+
+            // Clear form
+            document.getElementById('notificationTitle').value = '';
+            document.getElementById('notificationContent').value = '';
+
+            // Auto close after 2 seconds
+            setTimeout(() => {
+                sendNotificationModal.hide();
+            }, 2000);
+        } else {
+            errorDiv.textContent = data.message || 'Không thể gửi thông báo';
+            errorDiv.classList.remove('d-none');
+        }
+    } catch (error) {
+        console.error('Send notification error:', error);
+        errorDiv.textContent = 'Lỗi kết nối server';
+        errorDiv.classList.remove('d-none');
+    }
 }
 

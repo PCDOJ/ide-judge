@@ -16,18 +16,22 @@ class SSEManager {
      * @param {object} res - Express response object
      */
     addConnection(examId, userId, res) {
-        if (!this.examConnections.has(examId)) {
-            this.examConnections.set(examId, new Map());
+        // Ensure examId and userId are numbers for consistent Map keys
+        const examIdNum = parseInt(examId);
+        const userIdNum = parseInt(userId);
+
+        if (!this.examConnections.has(examIdNum)) {
+            this.examConnections.set(examIdNum, new Map());
         }
 
-        const examClients = this.examConnections.get(examId);
-        examClients.set(userId, res);
+        const examClients = this.examConnections.get(examIdNum);
+        examClients.set(userIdNum, res);
 
-        console.log(`[SSE] Client connected: examId=${examId}, userId=${userId}, total=${examClients.size}`);
+        console.log(`[SSE] Client connected: examId=${examIdNum}, userId=${userIdNum}, total=${examClients.size}`);
 
         // Remove connection when client disconnects
         res.on('close', () => {
-            this.removeConnection(examId, userId);
+            this.removeConnection(examIdNum, userIdNum);
         });
     }
 
@@ -37,14 +41,18 @@ class SSEManager {
      * @param {number} userId - User ID
      */
     removeConnection(examId, userId) {
-        const examClients = this.examConnections.get(examId);
+        // Ensure examId and userId are numbers for consistent Map keys
+        const examIdNum = parseInt(examId);
+        const userIdNum = parseInt(userId);
+
+        const examClients = this.examConnections.get(examIdNum);
         if (examClients) {
-            examClients.delete(userId);
-            console.log(`[SSE] Client disconnected: examId=${examId}, userId=${userId}, remaining=${examClients.size}`);
+            examClients.delete(userIdNum);
+            console.log(`[SSE] Client disconnected: examId=${examIdNum}, userId=${userIdNum}, remaining=${examClients.size}`);
 
             // Clean up empty exam maps
             if (examClients.size === 0) {
-                this.examConnections.delete(examId);
+                this.examConnections.delete(examIdNum);
             }
         }
     }
@@ -56,9 +64,12 @@ class SSEManager {
      * @param {object} data - Event data
      */
     sendToExam(examId, eventType, data) {
-        const examClients = this.examConnections.get(examId);
+        // Ensure examId is a number for consistent Map keys
+        const examIdNum = parseInt(examId);
+
+        const examClients = this.examConnections.get(examIdNum);
         if (!examClients) {
-            console.log(`[SSE] No clients connected for exam ${examId}`);
+            console.log(`[SSE] No clients connected for exam ${examIdNum}`);
             return 0;
         }
 
@@ -70,11 +81,11 @@ class SSEManager {
                 sentCount++;
             } catch (error) {
                 console.error(`[SSE] Error sending to user ${userId}:`, error);
-                this.removeConnection(examId, userId);
+                this.removeConnection(examIdNum, userId);
             }
         });
 
-        console.log(`[SSE] Sent ${eventType} to ${sentCount} clients in exam ${examId}`);
+        console.log(`[SSE] Sent ${eventType} to ${sentCount} clients in exam ${examIdNum}`);
         return sentCount;
     }
 

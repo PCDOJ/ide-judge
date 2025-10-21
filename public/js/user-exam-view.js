@@ -59,6 +59,9 @@ async function loadExamDetails() {
                 const endTime = currentExam.end_time ? (currentExam.end_time + 'Z') : null;
                 window.ExamMonitoring.enable(currentExam.id, currentExam.title, endTime);
             }
+
+            // Note: Notification listener is now handled globally by global-exam-notification.js
+            // It will automatically connect when user is in an active exam
         } else {
             showAlert(data.message || 'Không thể tải thông tin kỳ thi', 'danger');
             setTimeout(() => window.location.href = '/exams.html', 2000);
@@ -202,5 +205,98 @@ function showAlert(message, type) {
     setTimeout(() => {
         alert.remove();
     }, 5000);
+}
+
+// Open notifications list modal
+let notificationsListModal = null;
+async function openNotificationsListModal() {
+    if (!currentExam) {
+        showAlert('Chưa tải thông tin kỳ thi', 'warning');
+        return;
+    }
+
+    // Initialize modal if not already
+    if (!notificationsListModal) {
+        const modalElement = document.getElementById('notificationsListModal');
+        notificationsListModal = new bootstrap.Modal(modalElement);
+    }
+
+    // Show modal
+    notificationsListModal.show();
+
+    // Load notifications
+    await loadNotificationsList();
+}
+
+// Load notifications list
+async function loadNotificationsList() {
+    const container = document.getElementById('notificationsListContainer');
+
+    try {
+        container.innerHTML = `
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        `;
+
+        const response = await fetch(`/api/notifications/exams/${currentExam.id}/active`);
+        const data = await response.json();
+
+        if (data.success) {
+            if (data.notifications.length === 0) {
+                container.innerHTML = `
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> Chưa có thông báo nào
+                    </div>
+                `;
+                return;
+            }
+
+            // Render notifications list
+            let html = '<div class="list-group">';
+            data.notifications.forEach(notification => {
+                // Parse message (format: **Title**\n\nContent)
+                let title = 'Thông báo';
+                let content = notification.message;
+
+                const titleMatch = notification.message.match(/^\*\*(.+?)\*\*\n\n([\s\S]+)$/);
+                if (titleMatch) {
+                    title = titleMatch[1];
+                    content = titleMatch[2];
+                }
+
+                const time = new Date(notification.created_at).toLocaleString('vi-VN');
+
+                html += `
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1"><i class="bi bi-megaphone"></i> ${title}</h6>
+                            <small class="text-muted">${time}</small>
+                        </div>
+                        <p class="mb-1">${content.replace(/\n/g, '<br>')}</p>
+                        <small class="text-muted">Từ: ${notification.creator_name}</small>
+                    </div>
+                `;
+            });
+            html += '</div>';
+
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i> ${data.message || 'Không thể tải thông báo'}
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Load notifications error:', error);
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle"></i> Lỗi kết nối server
+            </div>
+        `;
+    }
 }
 

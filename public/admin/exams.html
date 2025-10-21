@@ -333,6 +333,44 @@
         </div>
     </div>
 
+    <!-- Send Notification Modal -->
+    <div class="modal fade" id="sendNotificationModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-megaphone"></i> Gửi thông báo đến thí sinh
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> Kỳ thi: <strong id="notificationExamTitle"></strong>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tiêu đề thông báo</label>
+                        <input type="text" class="form-control" id="notificationTitle"
+                               placeholder="Ví dụ: Thông báo quan trọng">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nội dung thông báo</label>
+                        <textarea class="form-control" id="notificationContent" rows="5"
+                                  placeholder="Nhập nội dung thông báo..."></textarea>
+                        <small class="text-muted">Thông báo sẽ hiển thị ngay lập tức cho tất cả thí sinh đang thi</small>
+                    </div>
+                    <div id="notificationError" class="alert alert-danger d-none"></div>
+                    <div id="notificationSuccess" class="alert alert-success d-none"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-primary" onclick="sendNotificationToStudents()">
+                        <i class="bi bi-send"></i> Gửi thông báo
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Mobile menu toggle

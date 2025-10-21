@@ -91,6 +91,9 @@
                     <p class="mb-0" id="examDescription"></p>
                 </div>
                 <div>
+                    <button class="btn btn-info me-2" onclick="openNotificationsListModal()">
+                        <i class="bi bi-bell"></i> Xem thông báo
+                    </button>
                     <button class="btn btn-danger" id="leaveExamBtn" style="display: none;" onclick="leaveExam()">
                         <i class="bi bi-box-arrow-right"></i> Rời khỏi kỳ thi
                     </button>
@@ -122,9 +125,37 @@
         </div>
     </div>
 
+    <!-- Notifications List Modal (Xem lại danh sách thông báo) -->
+    <div class="modal fade" id="notificationsListModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-bell"></i> Danh sách thông báo
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="notificationsListContainer">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Global Exam Monitoring -->
     <script src="/js/exam-monitoring.js"></script>
+    <!-- Global Exam Notification -->
+    <script src="/js/global-exam-notification.js"></script>
     <script src="/js/user-exam-view.js"></script>
 </body>
 </html>

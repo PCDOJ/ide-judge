@@ -155,6 +155,12 @@
                         <p class="text-muted mb-0" id="examTitle">Đang tải...</p>
                     </div>
                     <div>
+                        <button class="btn btn-primary me-2" onclick="openNotificationModal()" title="Gửi thông báo đến thí sinh">
+                            <i class="bi bi-megaphone"></i> Gửi thông báo
+                        </button>
+                        <button class="btn btn-info me-2" onclick="openManageNotificationsModal()" title="Quản lý thông báo đã gửi">
+                            <i class="bi bi-bell"></i> Quản lý thông báo
+                        </button>
                         <button class="btn btn-danger me-2" onclick="stopExam()">
                             <i class="bi bi-stop-circle"></i> Dừng contest và lấy bài
                         </button>
@@ -165,6 +171,11 @@
                             <i class="bi bi-arrow-left"></i> Quay lại
                         </button>
                     </div>
+                </div>
+
+                <!-- Toast Container -->
+                <div class="position-fixed top-0 end-0 p-3" style="z-index: 11">
+                    <div id="toastContainer"></div>
                 </div>
 
                 <!-- Filter -->
@@ -493,6 +504,285 @@
                     sidebarOverlay.classList.remove('show');
                 });
             });
+        }
+    </script>
+
+    <!-- Notification Modal -->
+    <div class="modal fade" id="notificationModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-megaphone"></i> Gửi thông báo đến thí sinh</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nội dung thông báo</label>
+                        <textarea class="form-control" id="notificationMessage" rows="4"
+                                  placeholder="Nhập nội dung thông báo..."></textarea>
+                        <small class="text-muted">Thông báo sẽ hiển thị ngay lập tức cho tất cả thí sinh đang thi</small>
+                    </div>
+                    <div id="notificationError" class="alert alert-danger d-none"></div>
+                    <div id="notificationSuccess" class="alert alert-success d-none"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-primary" onclick="sendNotification()">
+                        <i class="bi bi-send"></i> Gửi thông báo
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Notifications Modal -->
+    <div class="modal fade" id="manageNotificationsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-bell"></i> Quản lý thông báo đã gửi
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="notificationsListContainer">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Script -->
+    <script>
+        let notificationModal = null;
+
+        // Initialize notification modal
+        document.addEventListener('DOMContentLoaded', () => {
+            notificationModal = new bootstrap.Modal(document.getElementById('notificationModal'));
+        });
+
+        // Open notification modal
+        function openNotificationModal() {
+            document.getElementById('notificationMessage').value = '';
+            document.getElementById('notificationError').classList.add('d-none');
+            document.getElementById('notificationSuccess').classList.add('d-none');
+            notificationModal.show();
+        }
+
+        // Send notification
+        async function sendNotification() {
+            const message = document.getElementById('notificationMessage').value.trim();
+            const errorDiv = document.getElementById('notificationError');
+            const successDiv = document.getElementById('notificationSuccess');
+
+            // Hide previous messages
+            errorDiv.classList.add('d-none');
+            successDiv.classList.add('d-none');
+
+            // Validate
+            if (!message) {
+                errorDiv.textContent = 'Vui lòng nhập nội dung thông báo';
+                errorDiv.classList.remove('d-none');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/notifications/exams/${examId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    successDiv.textContent = `Đã gửi thông báo đến ${data.clientCount} thí sinh`;
+                    successDiv.classList.remove('d-none');
+
+                    // Clear message
+                    document.getElementById('notificationMessage').value = '';
+
+                    // Auto close after 2 seconds
+                    setTimeout(() => {
+                        notificationModal.hide();
+                    }, 2000);
+                } else {
+                    errorDiv.textContent = data.message || 'Không thể gửi thông báo';
+                    errorDiv.classList.remove('d-none');
+                }
+            } catch (error) {
+                console.error('Send notification error:', error);
+                errorDiv.textContent = 'Lỗi kết nối server';
+                errorDiv.classList.remove('d-none');
+            }
+        }
+
+        // Manage notifications modal
+        let manageNotificationsModal = null;
+
+        // Open manage notifications modal
+        async function openManageNotificationsModal() {
+            if (!manageNotificationsModal) {
+                const modalElement = document.getElementById('manageNotificationsModal');
+                manageNotificationsModal = new bootstrap.Modal(modalElement);
+            }
+
+            manageNotificationsModal.show();
+            await loadNotificationsList();
+        }
+
+        // Load notifications list
+        async function loadNotificationsList() {
+            const container = document.getElementById('notificationsListContainer');
+
+            try {
+                container.innerHTML = `
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                `;
+
+                const response = await fetch(`/api/notifications/exams/${examId}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    if (data.notifications.length === 0) {
+                        container.innerHTML = `
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i> Chưa có thông báo nào
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    // Render notifications list
+                    let html = '<div class="list-group">';
+                    data.notifications.forEach(notification => {
+                        // Parse message (format: **Title**\n\nContent)
+                        let title = 'Thông báo';
+                        let content = notification.message;
+
+                        const titleMatch = notification.message.match(/^\*\*(.+?)\*\*\n\n([\s\S]+)$/);
+                        if (titleMatch) {
+                            title = titleMatch[1];
+                            content = titleMatch[2];
+                        }
+
+                        const time = new Date(notification.created_at).toLocaleString('vi-VN');
+                        const statusBadge = notification.is_active
+                            ? '<span class="badge bg-success">Đang hiển thị</span>'
+                            : '<span class="badge bg-secondary">Đã ẩn</span>';
+
+                        html += `
+                            <div class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1"><i class="bi bi-megaphone"></i> ${title} ${statusBadge}</h6>
+                                        <p class="mb-1">${content.replace(/\n/g, '<br>')}</p>
+                                        <small class="text-muted">Gửi lúc: ${time} | Bởi: ${notification.creator_name}</small>
+                                    </div>
+                                    <div class="ms-3">
+                                        <button class="btn btn-sm btn-danger" onclick="deleteNotification(${notification.id})" title="Xóa thông báo">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle"></i> ${data.message || 'Không thể tải thông báo'}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Load notifications error:', error);
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Lỗi kết nối server
+                    </div>
+                `;
+            }
+        }
+
+        // Show toast notification
+        function showToast(message, type = 'success') {
+            const toastContainer = document.getElementById('toastContainer');
+            const toastId = 'toast-' + Date.now();
+
+            const bgClass = type === 'success' ? 'bg-success' :
+                           type === 'danger' ? 'bg-danger' :
+                           type === 'warning' ? 'bg-warning' : 'bg-info';
+
+            const icon = type === 'success' ? 'check-circle' :
+                        type === 'danger' ? 'exclamation-triangle' :
+                        type === 'warning' ? 'exclamation-circle' : 'info-circle';
+
+            const toastHtml = `
+                <div id="${toastId}" class="toast align-items-center text-white ${bgClass} border-0" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <i class="bi bi-${icon}"></i> ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>
+            `;
+
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+
+            const toastElement = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
+            toast.show();
+
+            // Remove from DOM after hidden
+            toastElement.addEventListener('hidden.bs.toast', () => {
+                toastElement.remove();
+            });
+        }
+
+        // Delete notification
+        async function deleteNotification(notificationId) {
+            if (!confirm('Bạn có chắc muốn xóa thông báo này? Thí sinh sẽ không thể xem lại thông báo này nữa.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/notifications/${notificationId}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Show success toast
+                    showToast('Đã xóa thông báo thành công', 'success');
+
+                    // Live update: reload notifications list
+                    await loadNotificationsList();
+                } else {
+                    showToast(data.message || 'Không thể xóa thông báo', 'danger');
+                }
+            } catch (error) {
+                console.error('Delete notification error:', error);
+                showToast('Lỗi kết nối server', 'danger');
+            }
         }
     </script>
 </body>
