@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workspace Demo - IDE Judge</title>
+    <link rel="stylesheet" href="/css/workspace.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <!-- Workspace Toolbar -->
+    <div class="workspace-toolbar">
+        <div class="toolbar-left">
+            <button class="btn-workspace btn-back" onclick="goBack()">
+                <i class="fas fa-arrow-left"></i> Quay lại
+            </button>
+            <div class="problem-info">
+                <span class="problem-code" id="problem-code">PROB001</span>
+                <span> - </span>
+                <span id="problem-title">Tổng hai số</span>
+            </div>
+        </div>
+        <div class="toolbar-right">
+            <div class="timer" id="timer">
+                <i class="fas fa-clock"></i>
+                <span id="time-remaining">--:--:--</span>
+            </div>
+            <button class="btn-workspace btn-save" onclick="saveManually()">
+                <i class="fas fa-save"></i> Lưu
+            </button>
+            <button class="btn-workspace btn-submit" onclick="submitCode()">
+                <i class="fas fa-paper-plane"></i> Nộp bài
+            </button>
+        </div>
+    </div>
+
+    <!-- Sync Status -->
+    <div id="sync-status" class="sync-status idle"></div>
+
+    <!-- Toggle Sidebar Button -->
+    <button class="toggle-sidebar-btn" onclick="toggleSidebar()">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <!-- File List Sidebar -->
+    <div class="file-list-sidebar" id="file-sidebar">
+        <div class="sidebar-header">
+            <span>Files</span>
+            <span id="files-count">0</span>
+        </div>
+        <div id="file-list">
+            <!-- Files will be loaded here -->
+        </div>
+    </div>
+
+    <!-- Workspace Container -->
+    <div class="workspace-container">
+        <!-- Code-server iframe sẽ được load ở đây -->
+        <iframe id="workspace-iframe" class="workspace-iframe" src="about:blank"></iframe>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="workspace-loading" id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text">Đang khởi tạo workspace...</div>
+    </div>
+
+    <script src="/js/workspace-client.js"></script>
+    <script>
+        // Global variables
+        let workspaceClient = null;
+        let contestId = null;
+        let problemId = null;
+        let problemCode = null;
+
+        // Initialize workspace khi page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            // Get params from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            contestId = parseInt(urlParams.get('contestId')) || 1;
+            problemId = parseInt(urlParams.get('problemId')) || 1;
+            problemCode = urlParams.get('problemCode') || 'PROB001';
+
+            // Update UI
+            document.getElementById('problem-code').textContent = problemCode;
+
+            try {
+                // Initialize workspace client
+                workspaceClient = new WorkspaceClient();
+                const session = await workspaceClient.init(contestId, problemId);
+
+                console.log('Workspace initialized:', session);
+
+                // Load code-server iframe directly from port 8080 to avoid proxy origin issues
+                const folderPath = `/workspace/${session.workspacePath}`;
+                const codeServerUrl = `http://localhost:8080/?folder=${encodeURIComponent(folderPath)}`;
+
+                console.log('[Workspace] Loading code-server iframe:', {
+                    folderPath: folderPath,
+                    encodedUrl: codeServerUrl,
+                    sessionId: session.sessionId,
+                    workspacePath: session.workspacePath
+                });
+
+                const iframe = document.getElementById('workspace-iframe');
+
+                // Add load event listener to track iframe loading
+                iframe.addEventListener('load', () => {
+                    console.log('[Workspace] Code-server iframe loaded successfully');
+                });
+
+                iframe.addEventListener('error', (e) => {
+                    console.error('[Workspace] Code-server iframe load error:', e);
+                });
+
+                iframe.src = codeServerUrl;
+
+                // Load file list
+                await loadFileList();
+
+                // Start timer
+                startTimer(session);
+
+                // Hide loading overlay
+                document.getElementById('loading-overlay').style.display = 'none';
+
+            } catch (error) {
+                console.error('Workspace initialization error:', error);
+                alert('Không thể khởi tạo workspace: ' + error.message);
+            }
+        });
+
+        // Load file list
+        async function loadFileList() {
+            try {
+                const response = await fetch(`/api/workspace/files/${contestId}/${problemId}`);
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.message);
+                }
+
+                const fileList = document.getElementById('file-list');
+                fileList.innerHTML = '';
+
+                if (data.files.length === 0) {
+                    fileList.innerHTML = '<div style="padding: 15px; color: #6c757d; text-align: center;">Chưa có file nào</div>';
+                } else {
+                    data.files.forEach(file => {
+                        const fileItem = document.createElement('div');
+                        fileItem.className = 'file-item' + (file.is_main_file ? ' main-file' : '');
+                        fileItem.innerHTML = `
+                            <i class="fas fa-file-code file-icon"></i>
+                            <span class="file-name">${file.file_name}</span>
+                            <span class="file-size">(${formatFileSize(file.file_size)})</span>
+                        `;
+                        fileList.appendChild(fileItem);
+                    });
+                }
+
+                document.getElementById('files-count').textContent = data.files.length;
+
+            } catch (error) {
+                console.error('Load file list error:', error);
+            }
+        }
+
+        // Save manually
+        async function saveManually() {
+            try {
+                await workspaceClient.syncToServer();
+                await loadFileList();
+                alert('Đã lưu thành công!');
+            } catch (error) {
+                console.error('Save error:', error);
+                alert('Lưu thất bại: ' + error.message);
+            }
+        }
+
+        // Submit code
+        async function submitCode() {
+            if (!confirm('Bạn có chắc muốn nộp bài? Sau khi nộp bạn không thể chỉnh sửa.')) {
+                return;
+            }
+
+            try {
+                const result = await workspaceClient.submitCode();
+                alert(`Nộp bài thành công!\n\nSố files: ${result.filesCount}\nFile chính: ${result.mainFile}`);
+                
+                // Redirect về trang exam
+                setTimeout(() => {
+                    window.location.href = `/exam-detail.html?id=${contestId}`;
+                }, 2000);
+
+            } catch (error) {
+                console.error('Submit error:', error);
+                alert('Nộp bài thất bại: ' + error.message);
+            }
+        }
+
+        // Go back
+        function goBack() {
+            if (confirm('Bạn có chắc muốn thoát? Code sẽ được tự động lưu.')) {
+                window.location.href = `/exam-detail.html?id=${contestId}`;
+            }
+        }
+
+        // Toggle sidebar
+        function toggleSidebar() {
+            const sidebar = document.getElementById('file-sidebar');
+            sidebar.classList.toggle('collapsed');
+        }
+
+        // Start timer
+        function startTimer(session) {
+            // TODO: Implement countdown timer based on session.expiresAt
+            const timerElement = document.getElementById('time-remaining');
+            
+            function updateTimer() {
+                // Placeholder - replace with actual logic
+                const now = new Date();
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                timerElement.textContent = `${hours}:${minutes}:${seconds}`;
+            }
+
+            updateTimer();
+            setInterval(updateTimer, 1000);
+        }
+
+        // Format file size
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // Listen to workspace sync status
+        window.addEventListener('workspace-sync-status', (e) => {
+            console.log('Sync status:', e.detail.status);
+            
+            // Reload file list after successful sync
+            if (e.detail.status === 'saved') {
+                loadFileList();
+            }
+        });
+
+        // Cleanup khi unload
+        window.addEventListener('beforeunload', () => {
+            if (workspaceClient) {
+                workspaceClient.destroy();
+            }
+        });
+    </script>
+</body>
+</html>
+

@@ -214,6 +214,9 @@
             <button class="btn btn-sm btn-info" onclick="togglePDF()" id="togglePdfBtn" title="Hiện/Ẩn đề bài">
                 <i class="bi bi-file-earmark-pdf"></i> Đề bài
             </button>
+            <button class="btn btn-sm btn-success" onclick="openWorkspace()" id="workspaceBtn" title="Mở Workspace (Multi-file + Terminal)">
+                <i class="bi bi-terminal"></i> Workspace
+            </button>
             <button class="btn btn-sm btn-light" onclick="backToProblems()">
                 <i class="bi bi-arrow-left"></i> Quay lại
             </button>
@@ -914,6 +917,30 @@
                     }
                 }, 5000);
             };
+        }
+
+        // Open Workspace (Multi-file + Terminal)
+        function openWorkspace() {
+            if (!examId || !problemId) {
+                showToast('error', 'Lỗi', 'Không tìm thấy thông tin bài tập');
+                return;
+            }
+
+            // Confirm switch to workspace mode
+            if (!confirm('Bạn muốn chuyển sang Workspace mode?\n\n✓ Hỗ trợ nhiều file\n✓ Có terminal\n✓ Tự động lưu mỗi 5 phút\n\nLưu ý: Code hiện tại sẽ được lưu trước khi chuyển.')) {
+                return;
+            }
+
+            // Save current code first
+            saveCode(true).then(success => {
+                if (success) {
+                    // Redirect to workspace page
+                    const problemCode = document.getElementById('problemTitle').textContent.split(' - ')[0].trim();
+                    window.location.href = `/workspace-demo.html?contestId=${examId}&problemId=${problemId}&problemCode=${problemCode}`;
+                } else {
+                    showToast('error', 'Lỗi', 'Không thể lưu code. Vui lòng thử lại.');
+                }
+            });
         }
 
         // Initialize on load

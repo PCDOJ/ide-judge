@@ -155,9 +155,34 @@ function backToProblems() {
     document.getElementById('pdfViewer').src = '';
 }
 
-// Code problem - open code editor
+// Code problem - show IDE mode selection modal
+let selectedProblemId = null;
+
 function codeProblem(problemId) {
-    window.location.href = `/exam-code.html?examId=${examId}&problemId=${problemId}`;
+    selectedProblemId = problemId;
+    const modal = new bootstrap.Modal(document.getElementById('ideModeModal'));
+    modal.show();
+}
+
+// Select IDE mode and redirect
+window.selectIdeMode = function(mode) {
+    if (!selectedProblemId) return;
+
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('ideModeModal'));
+    if (modal) modal.hide();
+
+    if (mode === 'judge0') {
+        // Judge0 mode (single file)
+        window.location.href = `/exam-code.html?examId=${examId}&problemId=${selectedProblemId}`;
+    } else if (mode === 'workspace') {
+        // Workspace mode (multi-file + terminal)
+        // Get problem info
+        const problem = currentExam.problems.find(p => p.id == selectedProblemId);
+        if (problem) {
+            window.location.href = `/workspace-demo.html?contestId=${examId}&problemId=${selectedProblemId}&problemCode=${problem.problem_code}`;
+        }
+    }
 }
 
 // Leave exam

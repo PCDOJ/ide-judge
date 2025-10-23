@@ -97,6 +97,7 @@ run_migrations() {
     run_migration "/app/migrations/04-add_exam_tab_violations.sql"
     run_migration "/app/migrations/05-update_violation_types.sql"
     run_migration "/app/migrations/06-add_exam_notifications.sql"
+    run_migration "/app/migrations/07-add_workspace_management.sql"
 
     echo ""
     echo "  Verifying critical tables..."
@@ -175,6 +176,27 @@ EOF
         echo "  ✓ Table 'exam_notifications' exists"
     else
         echo "  ❌ Table 'exam_notifications' missing!"
+        exit 1
+    fi
+
+    if table_exists "workspace_sessions"; then
+        echo "  ✓ Table 'workspace_sessions' exists"
+    else
+        echo "  ❌ Table 'workspace_sessions' missing!"
+        exit 1
+    fi
+
+    if table_exists "workspace_files"; then
+        echo "  ✓ Table 'workspace_files' exists"
+    else
+        echo "  ❌ Table 'workspace_files' missing!"
+        exit 1
+    fi
+
+    if table_exists "workspace_sync_log"; then
+        echo "  ✓ Table 'workspace_sync_log' exists"
+    else
+        echo "  ❌ Table 'workspace_sync_log' missing!"
         exit 1
     fi
 
