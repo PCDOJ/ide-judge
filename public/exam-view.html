@@ -151,6 +151,63 @@
         </div>
     </div>
 
+    <!-- IDE Mode Selection Modal -->
+    <div class="modal fade" id="ideModeModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-code-square"></i> Chọn chế độ làm bài
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <!-- Judge0 Mode -->
+                        <div class="col-12">
+                            <div class="card h-100 border-primary" style="cursor: pointer;" onclick="selectIdeMode('judge0')">
+                                <div class="card-body">
+                                    <h5 class="card-title">
+                                        <i class="bi bi-file-code"></i> Judge0 (Single File)
+                                    </h5>
+                                    <p class="card-text">
+                                        ✓ Đơn giản, dễ sử dụng<br>
+                                        ✓ Chỉ 1 file code<br>
+                                        ✓ Compile và chạy trực tiếp<br>
+                                        ✓ Phù hợp với bài tập đơn giản
+                                    </p>
+                                    <button class="btn btn-primary w-100">
+                                        <i class="bi bi-play-circle"></i> Chọn Judge0
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Workspace Mode -->
+                        <div class="col-12">
+                            <div class="card h-100 border-success" style="cursor: pointer;" onclick="selectIdeMode('workspace')">
+                                <div class="card-body">
+                                    <h5 class="card-title">
+                                        <i class="bi bi-terminal"></i> Workspace (Multi-file + Terminal)
+                                    </h5>
+                                    <p class="card-text">
+                                        ✓ Hỗ trợ nhiều file (.cpp, .h, .py, .java)<br>
+                                        ✓ Có terminal để compile/run<br>
+                                        ✓ Tự động lưu mỗi 5 phút<br>
+                                        ✓ Phù hợp với bài tập phức tạp
+                                    </p>
+                                    <button class="btn btn-success w-100">
+                                        <i class="bi bi-terminal"></i> Chọn Workspace
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Global Exam Monitoring -->
     <script src="/js/exam-monitoring.js"></script>

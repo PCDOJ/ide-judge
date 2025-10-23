@@ -11,6 +11,7 @@ const adminRoutes = require('./routes/admin');
 const examRoutes = require('./routes/exam');
 const submissionRoutes = require('./routes/submission');
 const notificationRoutes = require('./routes/notification');
+const workspaceRoutes = require('./routes/workspace');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
 
 const app = express();
@@ -58,6 +59,67 @@ app.use('/judge0-api', createProxyMiddleware({
     }
 }));
 
+// Proxy Code-Server requests
+const codeServerUrl = process.env.CODE_SERVER_URL || 'http://code-server:8080';
+const codeServerProxy = createProxyMiddleware({
+    target: codeServerUrl,
+    changeOrigin: true,
+    ws: true, // Enable WebSocket support for terminal
+    pathRewrite: {
+        '^/code-server': ''
+    },
+    logLevel: 'debug', // Enable detailed logging for debugging
+    onProxyReq: (proxyReq, req, res) => {
+        // Log HTTP proxy requests with full details
+        const queryString = req.url.includes('?') ? req.url.split('?')[1] : '';
+        const targetUrl = `${codeServerUrl}${proxyReq.path}`;
+        console.log(`[Code-Server Proxy HTTP] ${req.method} ${req.url} -> ${targetUrl}`);
+        if (queryString) {
+            console.log(`[Code-Server Proxy HTTP] Query params: ${queryString}`);
+        }
+    },
+    onProxyReqWs: (proxyReq, req, socket, options, head) => {
+        // Log WebSocket upgrade requests with full details
+        const queryString = req.url.includes('?') ? req.url.split('?')[1] : '';
+        const targetUrl = `${codeServerUrl}${req.url.replace(/^\/code-server/, '')}`;
+        console.log(`[Code-Server Proxy WS] UPGRADE ${req.url} -> ${targetUrl}`);
+        if (queryString) {
+            console.log(`[Code-Server Proxy WS] Query params: ${queryString}`);
+        }
+        console.log(`[Code-Server Proxy WS] Headers:`, {
+            host: req.headers.host,
+            origin: req.headers.origin,
+            upgrade: req.headers.upgrade,
+            connection: req.headers.connection
+        });
+    },
+    onError: (err, req, res) => {
+        console.error('[Code-Server Proxy Error]', {
+            error: err.message,
+            url: req.url,
+            method: req.method,
+            stack: err.stack
+        });
+
+        // Handle WebSocket errors differently
+        if (res.socket && res.socket.writable) {
+            res.socket.end();
+        } else if (!res.headersSent) {
+            res.status(500).json({
+                success: false,
+                message: 'Code-Server is not available',
+                error: err.message
+            });
+        }
+    },
+    onProxyRes: (proxyRes, req, res) => {
+        // Log successful proxy responses
+        console.log(`[Code-Server Proxy Response] ${req.method} ${req.url} - Status: ${proxyRes.statusCode}`);
+    }
+});
+
+app.use('/code-server', codeServerProxy);
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
@@ -65,6 +127,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api', examRoutes);
 app.use('/api/submission', submissionRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/workspace', workspaceRoutes);
 
 // Protected routes for HTML pages
 app.get('/index.html', requireAuth, (req, res) => {
@@ -101,8 +164,66 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
+// Workspace cleanup scheduler (chạy mỗi ngày lúc 2h sáng)
+const cron = require('node-cron');
+const workspaceManager = require('./utils/workspace-manager');
+
+cron.schedule('0 2 * * *', async () => {
+    console.log('[Scheduler] Running workspace cleanup...');
+    try {
+        await workspaceManager.cleanupExpiredWorkspaces();
+        console.log('[Scheduler] Workspace cleanup completed');
+    } catch (error) {
+        console.error('[Scheduler] Workspace cleanup error:', error);
+    }
+});
+
+console.log('✓ Workspace cleanup scheduler started (runs daily at 2:00 AM)');
+
+// Start server with WebSocket support
+const http = require('http');
+const server = http.createServer(app);
+
+// Setup WebSocket upgrade for code-server proxy
+server.on('upgrade', (req, socket, head) => {
+    const queryString = req.url.includes('?') ? req.url.split('?')[1] : '';
+    const pathname = req.url.split('?')[0];
+
+    console.log(`[WebSocket Upgrade] Incoming request:`, {
+        url: req.url,
+        pathname: pathname,
+        queryString: queryString,
+        headers: {
+            host: req.headers.host,
+            origin: req.headers.origin,
+            upgrade: req.headers.upgrade,
+            connection: req.headers.connection,
+            'sec-websocket-key': req.headers['sec-websocket-key'],
+            'sec-websocket-version': req.headers['sec-websocket-version']
+        }
+    });
+
+    if (pathname.startsWith('/code-server')) {
+        try {
+            console.log(`[WebSocket Upgrade] Forwarding to code-server proxy...`);
+            // Let the proxy handle the upgrade
+            codeServerProxy.upgrade(req, socket, head);
+            console.log(`[WebSocket Upgrade] Successfully forwarded to proxy`);
+        } catch (error) {
+            console.error(`[WebSocket Upgrade] Error forwarding to proxy:`, {
+                error: error.message,
+                stack: error.stack,
+                url: req.url
+            });
+            socket.destroy();
+        }
+    } else {
+        console.log(`[WebSocket Upgrade] Rejected - path does not start with /code-server:`, pathname);
+        socket.destroy();
+    }
+});
+
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`✓ Server is running on port ${PORT}`);
     console.log(`✓ Access the application at http://localhost:${PORT}`);
 });
