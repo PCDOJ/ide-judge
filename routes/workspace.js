@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const workspaceManager = require('../utils/workspace-manager');
+const fileWatcher = require('../utils/workspace-file-watcher');
 const { isAuthenticated } = require('../middleware/auth');
 const db = require('../config/database');
 
@@ -97,6 +98,16 @@ router.post('/create', isAuthenticated, async (req, res) => {
             problemId,
             problemCode,
             pdfPath
+        );
+
+        // Bắt đầu watch workspace để đồng bộ file changes
+        await fileWatcher.startWatching(
+            session.sessionId,
+            session.workspacePath,
+            userId,
+            contestId,
+            problemId,
+            problemCode
         );
 
         res.json({
@@ -208,6 +219,69 @@ router.get('/files/:contestId/:problemId', isAuthenticated, async (req, res) => 
 });
 
 /**
+ * POST /api/workspace/refresh-files
+ * Force refresh file list từ filesystem và sync vào database
+ */
+router.post('/refresh-files', isAuthenticated, async (req, res) => {
+    try {
+        const { sessionId, contestId, problemId } = req.body;
+        const userId = req.session.userId;
+
+        if (!sessionId || !contestId || !problemId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required parameters'
+            });
+        }
+
+        // Lấy problem code
+        const [problems] = await db.query(`
+            SELECT problem_code FROM exam_problems WHERE id = ?
+        `, [problemId]);
+
+        if (problems.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Problem not found'
+            });
+        }
+
+        const problemCode = problems[0].problem_code;
+
+        // Force sync files
+        const result = await workspaceManager.syncFilesToDatabase(
+            sessionId,
+            userId,
+            contestId,
+            problemId,
+            problemCode
+        );
+
+        // Lấy danh sách files mới
+        const files = await workspaceManager.getFilesFromDatabase(
+            userId,
+            contestId,
+            problemId
+        );
+
+        res.json({
+            success: true,
+            ...result,
+            files: files,
+            message: 'Files refreshed successfully'
+        });
+
+    } catch (error) {
+        console.error('[Workspace API] Refresh files error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to refresh files',
+            error: error.message
+        });
+    }
+});
+
+/**
  * POST /api/workspace/save-code
  * Lưu code từ workspace (không submit)
  */
@@ -216,14 +290,22 @@ router.post('/save-code', isAuthenticated, async (req, res) => {
         const { sessionId, contestId, problemId } = req.body;
         const userId = req.session.userId;
 
-        // Sync files trước
+        // Lấy problem code
         const [problems] = await db.query(`
             SELECT problem_code FROM exam_problems WHERE id = ?
         `, [problemId]);
 
-        const problemCode = problems[0]?.problem_code || 'PROBLEM';
+        if (problems.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Problem not found'
+            });
+        }
 
-        const syncResult = await workspaceManager.syncFilesToDatabase(
+        const problemCode = problems[0].problem_code;
+
+        // Sync files vào database trước (để cập nhật files mới nhất và xóa files cũ)
+        await workspaceManager.syncFilesToDatabase(
             sessionId,
             userId,
             contestId,
@@ -231,7 +313,7 @@ router.post('/save-code', isAuthenticated, async (req, res) => {
             problemCode
         );
 
-        // Lấy files đã sync
+        // Lấy danh sách files từ database (đã được sync)
         const files = await workspaceManager.getFilesFromDatabase(
             userId,
             contestId,
@@ -241,16 +323,25 @@ router.post('/save-code', isAuthenticated, async (req, res) => {
         if (files.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'No files to save'
+                message: `Không tìm thấy file code trong workspace. Vui lòng tạo file code (ví dụ: ${problemCode}.cpp, ${problemCode}.py, ${problemCode}.java)`
             });
         }
 
-        // Tìm main file
-        const mainFile = files.find(f => f.is_main_file) || files[0];
+        // Tìm main file (ưu tiên file được đánh dấu is_main_file)
+        let mainFile = files.find(f => f.is_main_file);
 
-        // Detect language
+        // Nếu không có main file, lấy file code đầu tiên
+        if (!mainFile) {
+            mainFile = files[0];
+        }
+
+        console.log(`[Workspace] Using main file: ${mainFile.file_name} (${mainFile.file_type}) for problem ${problemCode}`);
+
+        // Detect language từ extension
         const languageId = detectLanguageId(mainFile.file_name);
         const languageName = detectLanguageName(mainFile.file_name);
+
+        const sourceCode = mainFile.file_content;
 
         // Lưu vào code_submissions với status 'draft'
         await db.query(`
@@ -266,7 +357,7 @@ router.post('/save-code', isAuthenticated, async (req, res) => {
             userId,
             contestId,
             problemId,
-            mainFile.file_content, // Lưu file_content của main file
+            sourceCode,
             languageId,
             languageName
         ]);
@@ -281,13 +372,14 @@ router.post('/save-code', isAuthenticated, async (req, res) => {
         await db.query(`
             INSERT INTO submission_history (submission_id, user_id, exam_id, problem_id, source_code, language_id, language_name, action_type)
             VALUES (?, ?, ?, ?, ?, ?, ?, 'save')
-        `, [submission[0].id, userId, contestId, problemId, mainFile.content, languageId, languageName]);
+        `, [submission[0].id, userId, contestId, problemId, sourceCode, languageId, languageName]);
 
         res.json({
             success: true,
             message: 'Code saved successfully',
             filesCount: files.length,
             mainFile: mainFile.file_name,
+            language: languageName,
             source: 'workspace'
         });
 
@@ -310,14 +402,22 @@ router.post('/submit', isAuthenticated, async (req, res) => {
         const { sessionId, contestId, problemId } = req.body;
         const userId = req.session.userId;
 
-        // Sync files trước
+        // Lấy problem code
         const [problems] = await db.query(`
             SELECT problem_code FROM exam_problems WHERE id = ?
         `, [problemId]);
 
-        const problemCode = problems[0]?.problem_code || 'PROBLEM';
+        if (problems.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Problem not found'
+            });
+        }
 
-        const syncResult = await workspaceManager.syncFilesToDatabase(
+        const problemCode = problems[0].problem_code;
+
+        // Sync files vào database trước (để cập nhật files mới nhất và xóa files cũ)
+        await workspaceManager.syncFilesToDatabase(
             sessionId,
             userId,
             contestId,
@@ -325,7 +425,7 @@ router.post('/submit', isAuthenticated, async (req, res) => {
             problemCode
         );
 
-        // Lấy files đã sync
+        // Lấy danh sách files từ database (đã được sync)
         const files = await workspaceManager.getFilesFromDatabase(
             userId,
             contestId,
@@ -335,16 +435,25 @@ router.post('/submit', isAuthenticated, async (req, res) => {
         if (files.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'No files to submit'
+                message: `Không tìm thấy file code trong workspace. Vui lòng tạo file code (ví dụ: ${problemCode}.cpp, ${problemCode}.py, ${problemCode}.java)`
             });
         }
 
-        // Tìm main file
-        const mainFile = files.find(f => f.is_main_file) || files[0];
+        // Tìm main file (ưu tiên file được đánh dấu is_main_file)
+        let mainFile = files.find(f => f.is_main_file);
 
-        // Detect language
+        // Nếu không có main file, lấy file code đầu tiên
+        if (!mainFile) {
+            mainFile = files[0];
+        }
+
+        console.log(`[Workspace] Submitting main file: ${mainFile.file_name} (${mainFile.file_type}) for problem ${problemCode}`);
+
+        // Detect language từ extension
         const languageId = detectLanguageId(mainFile.file_name);
         const languageName = detectLanguageName(mainFile.file_name);
+
+        const sourceCode = mainFile.file_content;
 
         // Lưu vào code_submissions
         await db.query(`
@@ -361,7 +470,7 @@ router.post('/submit', isAuthenticated, async (req, res) => {
             userId,
             contestId,
             problemId,
-            mainFile.file_content, // Lưu file_content của main file
+            sourceCode,
             languageId,
             languageName
         ]);
@@ -371,13 +480,14 @@ router.post('/submit', isAuthenticated, async (req, res) => {
             INSERT INTO workspace_sync_log
             (session_id, user_id, sync_type, files_count, total_size, status)
             VALUES (?, ?, 'submit', ?, ?, 'success')
-        `, [sessionId, userId, files.length, syncResult.totalSize]);
+        `, [sessionId, userId, files.length, sourceCode.length]);
 
         res.json({
             success: true,
             message: 'Code submitted successfully',
             filesCount: files.length,
-            mainFile: mainFile.file_name
+            mainFile: mainFile.file_name,
+            language: languageName
         });
 
     } catch (error) {
@@ -457,6 +567,176 @@ function detectLanguageName(filename) {
     if (filename.endsWith('.java')) return 'Java';
     return 'C++';
 }
+
+/**
+ * POST /api/workspace/run-code
+ * Tạo script để compile và run code
+ */
+router.post('/run-code', isAuthenticated, async (req, res) => {
+    try {
+        const { contestId, problemId, cppVersion, fileName } = req.body;
+
+        if (!contestId || !problemId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing contestId or problemId'
+            });
+        }
+
+        // Get workspace path
+        const username = req.session.username;
+        const workspacePath = `/workspace/${username}/contest_${contestId}/problem_${problemId}`;
+
+        // Khai báo fs và path một lần duy nhất cho toàn bộ hàm
+        const fs = require('fs').promises;
+        const path = require('path');
+
+        // Nếu không có fileName từ UI, fallback về logic cũ (tìm file theo problemCode)
+        let targetFileName = fileName;
+
+        if (!targetFileName) {
+            // Lấy problem code
+            const [problems] = await db.query(`
+                SELECT problem_code FROM exam_problems WHERE id = ?
+            `, [problemId]);
+
+            const problemCode = problems[0]?.problem_code || 'PROBLEM';
+
+            // Scan files để tìm file có tên trùng problemCode
+            const fullPath = path.join(workspacePath);
+
+            let files;
+            try {
+                const entries = await fs.readdir(fullPath, { withFileTypes: true });
+                files = entries.filter(entry => entry.isFile() && !entry.name.startsWith('.'));
+            } catch (error) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Workspace not found or empty'
+                });
+            }
+
+            // Tìm file có tên trùng với problemCode
+            const codeExtensions = ['.cpp', '.c', '.py', '.java', '.js', '.go', '.rs'];
+            for (const file of files) {
+                const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+                const ext = path.extname(file.name).toLowerCase();
+
+                if (baseName === problemCode && codeExtensions.includes(ext)) {
+                    targetFileName = file.name;
+                    break;
+                }
+            }
+
+            if (!targetFileName) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Không tìm thấy file code với tên "${problemCode}". Vui lòng chỉ định file cần run hoặc đặt tên file trùng với mã bài.`
+                });
+            }
+        }
+
+        const ext = targetFileName.split('.').pop().toLowerCase();
+
+        // Generate compile and run command
+        let command = '';
+        const baseName = targetFileName.substring(0, targetFileName.lastIndexOf('.')) || targetFileName;
+
+        if (ext === 'cpp' || ext === 'cc' || ext === 'cxx') {
+            const std = cppVersion || 'c++20';
+            command = `g++ ${targetFileName} -o ${baseName} -std=${std} -Wall -Wextra -O2 && ./${baseName}`;
+        } else if (ext === 'c') {
+            const std = cppVersion || 'c11';
+            command = `gcc ${targetFileName} -o ${baseName} -std=${std} -Wall -Wextra -O2 && ./${baseName}`;
+        } else if (ext === 'py') {
+            command = `python3 ${targetFileName}`;
+        } else if (ext === 'java') {
+            const className = targetFileName.substring(0, targetFileName.lastIndexOf('.'));
+            command = `javac ${targetFileName} && java ${className}`;
+        } else if (ext === 'go') {
+            command = `go run ${targetFileName}`;
+        } else if (ext === 'rs') {
+            command = `rustc ${targetFileName} -o ${baseName} && ./${baseName}`;
+        } else if (ext === 'js') {
+            command = `node ${targetFileName}`;
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: `Unsupported file extension: ${ext}`
+            });
+        }
+
+        // Add input redirection if input.txt exists
+        const inputPath = path.join(workspacePath, 'input.txt');
+
+        try {
+            await fs.access(inputPath);
+            // input.txt exists
+            if (ext === 'cpp' || ext === 'c' || ext === 'cc' || ext === 'cxx') {
+                command = command.replace(` && ./${baseName}`, ` && ./${baseName} < input.txt`);
+            } else if (ext === 'java') {
+                command = command.replace(` && java ${baseName}`, ` && java ${baseName} < input.txt`);
+            } else if (ext === 'rs') {
+                command = command.replace(` && ./${baseName}`, ` && ./${baseName} < input.txt`);
+            } else if (ext === 'py') {
+                command = `${command} < input.txt`;
+            } else if (ext === 'go') {
+                command = `${command} < input.txt`;
+            } else if (ext === 'js') {
+                command = `${command} < input.txt`;
+            }
+        } catch (err) {
+            // input.txt doesn't exist, use command as is
+        }
+
+        // Create run script
+        const runScriptPath = path.join(workspacePath, 'run.sh');
+        const scriptContent = `#!/bin/bash
+# Auto-generated run script
+# File: ${targetFileName}
+# Generated at: ${new Date().toISOString()}
+
+echo "========================================="
+echo "Running: ${targetFileName}"
+echo "========================================="
+echo ""
+
+${command}
+
+EXIT_CODE=$?
+
+echo ""
+echo "========================================="
+echo "Program exited with code: $EXIT_CODE"
+echo "========================================="
+
+exit $EXIT_CODE
+`;
+
+        await fs.writeFile(runScriptPath, scriptContent);
+        await fs.chmod(runScriptPath, 0o755);
+
+        res.json({
+            success: true,
+            message: 'Run script created successfully',
+            data: {
+                fileName: targetFileName,
+                language: detectLanguageName(targetFileName),
+                command: command,
+                scriptPath: './run.sh',
+                workspacePath: workspacePath
+            }
+        });
+
+    } catch (error) {
+        console.error('Run code error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to create run script',
+            error: error.message
+        });
+    }
+});
 
 module.exports = router;
 

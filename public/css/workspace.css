@@ -197,11 +197,15 @@
 .file-list-sidebar {
     position: fixed;
     left: 0;
-    top: 60px;
+    top: 50%;
+    transform: translateY(-50%);
     width: 280px;
-    height: calc(100vh - 60px);
+    max-height: 60vh;
     background: #ffffff;
     border-right: 2px solid #e0e0e0;
+    border-top: 2px solid #e0e0e0;
+    border-bottom: 2px solid #e0e0e0;
+    border-radius: 0 8px 8px 0;
     overflow-y: auto;
     z-index: 999;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -209,7 +213,7 @@
 }
 
 .file-list-sidebar.collapsed {
-    transform: translateX(-280px);
+    transform: translateY(-50%) translateX(-280px);
 }
 
 .file-list-sidebar .sidebar-header {
@@ -231,6 +235,26 @@
     border-radius: 12px;
     font-size: 13px;
     font-weight: 600;
+}
+
+.btn-refresh-files {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 12px;
+}
+
+.btn-refresh-files:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: rotate(180deg);
+}
+
+.btn-refresh-files:active {
+    transform: rotate(360deg);
 }
 
 .file-list-sidebar #file-list {
@@ -291,7 +315,8 @@
 .toggle-sidebar-btn {
     position: fixed;
     left: 0;
-    top: 70px;
+    top: 50%;
+    transform: translateY(-50%);
     width: 36px;
     height: 48px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -391,12 +416,13 @@
 
     .file-list-sidebar {
         width: 240px;
-        top: 56px;
-        height: calc(100vh - 56px);
+        top: 50%;
+        transform: translateY(-50%);
+        max-height: 60vh;
     }
 
     .file-list-sidebar.collapsed {
-        transform: translateX(-240px);
+        transform: translateY(-50%) translateX(-240px);
     }
 
     .btn-workspace {
