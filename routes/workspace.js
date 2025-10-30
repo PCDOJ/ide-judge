@@ -738,5 +738,304 @@ exit $EXIT_CODE
     }
 });
 
+/**
+ * POST /api/workspace/execute-code
+ * Execute code và trả về output (cho popup mode) - Sử dụng Judge0
+ */
+router.post('/execute-code', isAuthenticated, async (req, res) => {
+    try {
+        const { contestId, problemId, cppVersion, fileName, stdin } = req.body;
+
+        if (!contestId || !problemId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing contestId or problemId'
+            });
+        }
+
+        // Get workspace path
+        const username = req.session.username;
+        const workspacePath = `/workspace/${username}/contest_${contestId}/problem_${problemId}`;
+
+        const fs = require('fs').promises;
+        const path = require('path');
+        const axios = require('axios');
+
+        // Tìm file cần run
+        let targetFileName = fileName;
+        if (!targetFileName) {
+            const [problems] = await db.query('SELECT problem_code FROM exam_problems WHERE id = ?', [problemId]);
+            if (problems.length === 0) {
+                return res.status(404).json({ success: false, message: 'Problem not found' });
+            }
+            const problemCode = problems[0].problem_code;
+            const files = await fs.readdir(workspacePath);
+            const codeExtensions = ['cpp', 'c', 'py', 'java', 'js', 'go', 'rs'];
+            const codeFiles = files.filter(f => {
+                const ext = f.split('.').pop().toLowerCase();
+                return codeExtensions.includes(ext);
+            });
+            targetFileName = codeFiles.find(f => f.startsWith(problemCode)) || codeFiles[0];
+        }
+
+        if (!targetFileName) {
+            return res.status(404).json({ success: false, message: 'No code file found' });
+        }
+
+        const filePath = path.join(workspacePath, targetFileName);
+        const ext = targetFileName.split('.').pop().toLowerCase();
+
+        // Đọc source code
+        const sourceCode = await fs.readFile(filePath, 'utf8');
+
+        // Đọc stdin từ input.txt nếu không có stdin từ request
+        let stdinData = stdin || '';
+        if (!stdinData) {
+            const inputPath = path.join(workspacePath, 'input.txt');
+            try {
+                const inputContent = await fs.readFile(inputPath, 'utf8');
+                // Lọc bỏ comment lines (bắt đầu bằng #)
+                stdinData = inputContent.split('\n')
+                    .filter(line => !line.trim().startsWith('#'))
+                    .join('\n')
+                    .trim();
+            } catch (err) {
+                // Không có input.txt, để trống
+            }
+        }
+
+        // Map extension to Judge0 language ID
+        const languageMap = {
+            'cpp': cppVersion === 'c++17' ? 54 : cppVersion === 'c++14' ? 53 : 76, // C++20 default (76)
+            'c': 50, // C (GCC 9.2.0)
+            'py': 71, // Python (3.8.1)
+            'java': 62, // Java (OpenJDK 13.0.1)
+            'js': 63, // JavaScript (Node.js 12.14.0)
+            'go': 60, // Go (1.13.5)
+            'rs': 73  // Rust (1.40.0)
+        };
+
+        const languageId = languageMap[ext];
+        if (!languageId) {
+            return res.status(400).json({
+                success: false,
+                message: `Unsupported file type: ${ext}`
+            });
+        }
+
+        // Gọi Judge0 API
+        const judge0Url = process.env.JUDGE0_API_URL || 'http://judge0-server:2358';
+
+        console.log('[Execute Code] Using Judge0 at:', judge0Url);
+        console.log('[Execute Code] Language ID:', languageId, 'File:', targetFileName);
+        console.log('[Execute Code] Source code length:', sourceCode.length);
+        console.log('[Execute Code] Stdin length:', stdinData.length);
+
+        // Tạo submission
+        const submissionData = {
+            source_code: Buffer.from(sourceCode).toString('base64'),
+            language_id: languageId,
+            stdin: stdinData ? Buffer.from(stdinData).toString('base64') : '',
+            base64_encoded: true,
+            wait: true, // Wait for result
+            cpu_time_limit: 10, // 10 seconds
+            wall_time_limit: 15, // 15 seconds
+            memory_limit: 256000 // 256 MB
+        };
+
+        console.log('[Execute Code] Submitting to Judge0...');
+
+        const submitResponse = await axios.post(
+            `${judge0Url}/submissions?base64_encoded=true&wait=true`,
+            submissionData,
+            {
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                timeout: 20000 // 20 seconds timeout for HTTP request
+            }
+        );
+
+        console.log('[Execute Code] Judge0 response status:', submitResponse.status);
+        const result = submitResponse.data;
+        console.log('[Execute Code] Judge0 result status:', result.status);
+
+        // Decode base64 outputs
+        const stdout = result.stdout ? Buffer.from(result.stdout, 'base64').toString('utf8') : '';
+        const stderr = result.stderr ? Buffer.from(result.stderr, 'base64').toString('utf8') : '';
+        const compileOutput = result.compile_output ? Buffer.from(result.compile_output, 'base64').toString('utf8') : '';
+        const message = result.message ? Buffer.from(result.message, 'base64').toString('utf8') : '';
+
+        // Determine success
+        const isSuccess = result.status.id === 3; // Accepted
+        const hasCompileError = result.status.id === 6; // Compilation Error
+
+        console.log('[Execute Code] Success:', isSuccess, 'Compile Error:', hasCompileError);
+
+        // Trả về kết quả
+        res.json({
+            success: isSuccess,
+            data: {
+                fileName: targetFileName,
+                language: detectLanguageName(targetFileName),
+                compileOutput: compileOutput,
+                compileError: hasCompileError,
+                compileTime: result.time ? parseFloat(result.time) * 1000 : 0, // Convert to ms
+                stdout: stdout,
+                stderr: stderr,
+                exitCode: result.status.id,
+                executionTime: result.time ? parseFloat(result.time) * 1000 : 0, // Convert to ms
+                memory: result.memory, // KB
+                statusDescription: result.status.description,
+                error: !isSuccess ? (message || stderr || compileOutput || result.status.description) : null
+            }
+        });
+
+    } catch (error) {
+        console.error('Execute code error:', error);
+        console.error('Error stack:', error.stack);
+
+        // Nếu là axios error, log thêm response
+        if (error.response) {
+            console.error('Axios response status:', error.response.status);
+            console.error('Axios response data:', error.response.data);
+        }
+
+        res.status(500).json({
+            success: false,
+            message: 'Failed to execute code',
+            error: error.message,
+            details: error.response ? error.response.data : null
+        });
+    }
+});
+
+/**
+ * POST /api/workspace/create-run-script
+ * Tạo script file để chạy code trong terminal
+ */
+router.post('/create-run-script', isAuthenticated, async (req, res) => {
+    try {
+        const { contestId, problemId, command } = req.body;
+
+        if (!contestId || !problemId || !command) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required parameters'
+            });
+        }
+
+        const username = req.session.username;
+        const workspacePath = `/workspace/${username}/contest_${contestId}/problem_${problemId}`;
+
+        const fs = require('fs').promises;
+        const path = require('path');
+
+        // Tạo script file
+        const scriptPath = path.join(workspacePath, 'run.sh');
+        const scriptContent = `#!/bin/bash
+# Auto-generated run script
+cd "$(dirname "$0")"
+
+echo "========================================="
+echo "Running code..."
+echo "========================================="
+echo ""
+
+${command}
+
+echo ""
+echo "========================================="
+echo "Execution completed!"
+echo "========================================="
+`;
+
+        await fs.writeFile(scriptPath, scriptContent, { mode: 0o755 });
+
+        res.json({
+            success: true,
+            data: {
+                scriptPath: './run.sh',
+                fullPath: scriptPath,
+                command: command
+            }
+        });
+
+    } catch (error) {
+        console.error('Create run script error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to create run script',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/workspace/execute-in-terminal
+ * Execute command trong code-server container terminal
+ */
+router.post('/execute-in-terminal', isAuthenticated, async (req, res) => {
+    try {
+        const { contestId, problemId, command } = req.body;
+
+        if (!contestId || !problemId || !command) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required parameters'
+            });
+        }
+
+        const username = req.session.username;
+        const workspacePath = `/workspace/${username}/contest_${contestId}/problem_${problemId}`;
+
+        const { exec } = require('child_process');
+        const util = require('util');
+        const execPromise = util.promisify(exec);
+
+        // Container name từ docker-compose
+        const containerName = process.env.CODE_SERVER_CONTAINER || 'ide-judge-code-server';
+
+        // Tạo command để execute trong container
+        // Sử dụng bash -c để chạy command trong working directory
+        const dockerCommand = `docker exec -w ${workspacePath} ${containerName} bash -c "${command.replace(/"/g, '\\"')}"`;
+
+        console.log('[Execute in terminal] Running:', dockerCommand);
+
+        // Execute command
+        const { stdout, stderr } = await execPromise(dockerCommand, {
+            timeout: 30000, // 30 seconds timeout
+            maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+        });
+
+        res.json({
+            success: true,
+            data: {
+                stdout: stdout,
+                stderr: stderr,
+                command: command,
+                workspacePath: workspacePath
+            }
+        });
+
+    } catch (error) {
+        console.error('Execute in terminal error:', error);
+
+        // Parse error để lấy stdout/stderr nếu có
+        const stdout = error.stdout || '';
+        const stderr = error.stderr || error.message || '';
+
+        res.json({
+            success: false,
+            data: {
+                stdout: stdout,
+                stderr: stderr,
+                command: req.body.command,
+                error: error.message
+            }
+        });
+    }
+});
+
 module.exports = router;
 

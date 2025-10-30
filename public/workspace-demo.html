@@ -116,9 +116,29 @@
                             <option value="c++23">C++23</option>
                         </select>
                     </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="show-popup-output" value="">
+                            <label class="form-check-label" for="show-popup-output">
+                                <i class="fas fa-window-restore"></i> Chạy qua Judge0 (có thể nhập input)
+                            </label>
+                        </div>
+                        <small class="text-muted">
+                            Nếu không chọn, code sẽ chạy trực tiếp trong code-server container
+                        </small>
+                    </div>
+                    <div class="mb-3" id="stdin-input-container" style="display: none;">
+                        <label class="form-label">
+                            <i class="fas fa-keyboard"></i> Input (stdin):
+                        </label>
+                        <textarea class="form-control" id="stdin-input" rows="4" placeholder="Nhập input cho chương trình (nếu cần)..."></textarea>
+                        <small class="text-muted">
+                            Nếu để trống, hệ thống sẽ sử dụng input từ file input.txt
+                        </small>
+                    </div>
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle"></i>
-                        Code sẽ được compile và run trong VSCode terminal. Vui lòng kiểm tra terminal để xem kết quả.
+                        <span id="run-mode-info">Code sẽ được compile và run trực tiếp trong code-server container. Kết quả hiển thị trong popup.</span>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -641,6 +661,21 @@
                 // Initial language display
                 updateLanguageDisplay();
 
+                // Setup checkbox event listener
+                const showPopupCheckbox = document.getElementById('show-popup-output');
+                const runModeInfo = document.getElementById('run-mode-info');
+                const stdinInputContainer = document.getElementById('stdin-input-container');
+
+                showPopupCheckbox.addEventListener('change', function() {
+                    if (this.checked) {
+                        runModeInfo.innerHTML = '<i class="fas fa-window-restore"></i> Code sẽ được chạy qua Judge0 và kết quả hiển thị trong popup riêng với logs đầy đủ.';
+                        stdinInputContainer.style.display = 'block'; // Hiển thị input field
+                    } else {
+                        runModeInfo.innerHTML = '<i class="fas fa-terminal"></i> Code sẽ được compile và run trực tiếp trong code-server container. Kết quả hiển thị trong popup.';
+                        stdinInputContainer.style.display = 'none'; // Ẩn input field
+                    }
+                });
+
                 // Show modal
                 const modal = new bootstrap.Modal(document.getElementById('runCodeModal'));
                 modal.show();
@@ -699,6 +734,7 @@
                 }
 
                 const cppVersion = document.getElementById('cpp-version').value;
+                const showPopup = document.getElementById('show-popup-output').checked;
 
                 // Close modal
                 const modal = bootstrap.Modal.getInstance(document.getElementById('runCodeModal'));
@@ -717,7 +753,8 @@
                         contestId: contestId,
                         problemId: problemId,
                         fileName: selectedFile,
-                        cppVersion: cppVersion
+                        cppVersion: cppVersion,
+                        showPopup: showPopup
                     })
                 });
 
@@ -728,47 +765,283 @@
                     return;
                 }
 
-                // Show success with command
-                const command = data.data.scriptPath;
-                const fullCommand = data.data.command;
+                if (showPopup) {
+                    // Mode popup: Chạy code và hiển thị kết quả trong popup
+                    showNotification('info', 'Đang chạy code...');
 
-                // Create a nice notification with copy button
-                const notificationHtml = `
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 10px;">
-                        <div style="margin-bottom: 10px;">
-                            <strong>✅ Script đã được tạo!</strong>
-                        </div>
-                        <div style="margin-bottom: 10px;">
-                            <strong>File:</strong> ${data.data.fileName} (${data.data.language})
-                        </div>
-                        <div style="margin-bottom: 10px;">
-                            <strong>Lệnh compile & run:</strong>
-                            <div style="background: #2d2d2d; color: #f8f8f2; padding: 10px; border-radius: 4px; font-family: monospace; margin-top: 5px; overflow-x: auto;">
-                                ${fullCommand}
-                            </div>
-                        </div>
-                        <div style="margin-bottom: 10px;">
-                            <strong>Cách chạy:</strong>
-                        </div>
-                        <ol style="margin: 0; padding-left: 20px;">
-                            <li>Mở Terminal trong VSCode (Ctrl + \`)</li>
-                            <li>Chạy lệnh: <code style="background: #e9ecef; padding: 2px 6px; border-radius: 3px;">${command}</code></li>
-                        </ol>
-                        <div style="margin-top: 10px;">
-                            <button onclick="copyToClipboard('${command}')" style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
-                                📋 Copy lệnh
-                            </button>
-                        </div>
-                    </div>
-                `;
+                    // Lấy stdin từ textarea
+                    const stdinInput = document.getElementById('stdin-input').value;
 
-                // Show in a custom modal or notification
-                showCustomNotification('Run Code', notificationHtml);
+                    // Execute code và lấy output
+                    const executeResponse = await fetch('/api/workspace/execute-code', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            contestId: contestId,
+                            problemId: problemId,
+                            fileName: selectedFile,
+                            cppVersion: cppVersion,
+                            stdin: stdinInput
+                        })
+                    });
+
+                    const executeData = await executeResponse.json();
+
+                    if (!executeData.success) {
+                        alert('Lỗi khi chạy code: ' + executeData.message);
+                        return;
+                    }
+
+                    // Hiển thị kết quả trong popup
+                    showCodeOutputPopup(executeData.data);
+
+                } else {
+                    // Mode terminal: Execute trực tiếp trong container
+                    const fullCommand = data.data.command;
+
+                    showNotification('info', 'Đang chạy code trong terminal...');
+
+                    // Execute command trong code-server container
+                    const executeResponse = await fetch('/api/workspace/execute-in-terminal', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            contestId: contestId,
+                            problemId: problemId,
+                            command: fullCommand
+                        })
+                    });
+
+                    const executeData = await executeResponse.json();
+
+                    // Hiển thị kết quả trong popup (giống như popup mode)
+                    const outputData = {
+                        success: executeData.success,
+                        fileName: data.data.fileName,
+                        language: data.data.language,
+                        compileOutput: '',
+                        compileError: false,
+                        compileTime: 0,
+                        stdout: executeData.data.stdout || '',
+                        stderr: executeData.data.stderr || '',
+                        exitCode: executeData.success ? 0 : 1,
+                        executionTime: 0,
+                        error: executeData.data.error || null,
+                        statusDescription: executeData.success ? 'Executed successfully' : 'Execution failed'
+                    };
+
+                    showCodeOutputPopup(outputData);
+                }
 
             } catch (error) {
                 console.error('Run code error:', error);
                 alert('Lỗi khi chạy code: ' + error.message);
             }
+        }
+
+        // Show Code Output Popup
+        function showCodeOutputPopup(outputData) {
+            // Create popup window
+            const popupWidth = 900;
+            const popupHeight = 700;
+            const left = (screen.width - popupWidth) / 2;
+            const top = (screen.height - popupHeight) / 2;
+
+            const popup = window.open('', 'CodeOutput',
+                `width=${popupWidth},height=${popupHeight},left=${left},top=${top},resizable=yes,scrollbars=yes`);
+
+            if (!popup) {
+                alert('Popup bị chặn! Vui lòng cho phép popup cho trang này.');
+                return;
+            }
+
+            // Build HTML content for popup
+            const htmlContent = `
+                <!DOCTYPE html>
+                <html lang="vi">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Code Output - ${outputData.fileName}</title>
+                    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+                    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+                    <style>
+                        body {
+                            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                            background: #f5f5f5;
+                            padding: 20px;
+                        }
+                        .output-container {
+                            background: white;
+                            border-radius: 8px;
+                            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                            padding: 20px;
+                            margin-bottom: 20px;
+                        }
+                        .output-header {
+                            border-bottom: 2px solid #e9ecef;
+                            padding-bottom: 15px;
+                            margin-bottom: 20px;
+                        }
+                        .output-section {
+                            margin-bottom: 20px;
+                        }
+                        .output-section h6 {
+                            color: #495057;
+                            font-weight: 600;
+                            margin-bottom: 10px;
+                        }
+                        .code-block {
+                            background: #2d2d2d;
+                            color: #f8f8f2;
+                            padding: 15px;
+                            border-radius: 6px;
+                            font-family: 'Courier New', monospace;
+                            font-size: 14px;
+                            white-space: pre-wrap;
+                            word-wrap: break-word;
+                            max-height: 400px;
+                            overflow-y: auto;
+                        }
+                        .success-output {
+                            border-left: 4px solid #28a745;
+                        }
+                        .error-output {
+                            border-left: 4px solid #dc3545;
+                        }
+                        .status-badge {
+                            display: inline-block;
+                            padding: 5px 15px;
+                            border-radius: 20px;
+                            font-weight: 600;
+                            font-size: 14px;
+                        }
+                        .status-success {
+                            background: #d4edda;
+                            color: #155724;
+                        }
+                        .status-error {
+                            background: #f8d7da;
+                            color: #721c24;
+                        }
+                        .info-row {
+                            display: flex;
+                            justify-content: space-between;
+                            padding: 8px 0;
+                            border-bottom: 1px solid #f0f0f0;
+                        }
+                        .info-label {
+                            font-weight: 600;
+                            color: #6c757d;
+                        }
+                        .info-value {
+                            color: #212529;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="output-container">
+                        <div class="output-header">
+                            <h4><i class="fas fa-terminal"></i> Kết quả chạy code</h4>
+                            <div class="mt-2">
+                                <span class="status-badge ${outputData.success ? 'status-success' : 'status-error'}">
+                                    ${outputData.success ? '✓ Thành công' : '✗ Lỗi'}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="output-section">
+                            <h6><i class="fas fa-info-circle"></i> Thông tin</h6>
+                            <div class="info-row">
+                                <span class="info-label">File:</span>
+                                <span class="info-value">${outputData.fileName}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Ngôn ngữ:</span>
+                                <span class="info-value">${outputData.language}</span>
+                            </div>
+                            ${outputData.compileTime ? `
+                            <div class="info-row">
+                                <span class="info-label">Thời gian compile:</span>
+                                <span class="info-value">${outputData.compileTime}ms</span>
+                            </div>
+                            ` : ''}
+                            ${outputData.executionTime ? `
+                            <div class="info-row">
+                                <span class="info-label">Thời gian chạy:</span>
+                                <span class="info-value">${outputData.executionTime}ms</span>
+                            </div>
+                            ` : ''}
+                            ${outputData.memory ? `
+                            <div class="info-row">
+                                <span class="info-label">Bộ nhớ sử dụng:</span>
+                                <span class="info-value">${outputData.memory} KB</span>
+                            </div>
+                            ` : ''}
+                            ${outputData.statusDescription ? `
+                            <div class="info-row">
+                                <span class="info-label">Trạng thái:</span>
+                                <span class="info-value">${outputData.statusDescription}</span>
+                            </div>
+                            ` : ''}
+                            <div class="info-row">
+                                <span class="info-label">Exit code:</span>
+                                <span class="info-value">${outputData.exitCode || 0}</span>
+                            </div>
+                        </div>
+
+                        ${outputData.compileOutput ? `
+                        <div class="output-section">
+                            <h6><i class="fas fa-cog"></i> Compile Output</h6>
+                            <div class="code-block ${outputData.compileError ? 'error-output' : 'success-output'}">
+${outputData.compileOutput}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${outputData.stdout ? `
+                        <div class="output-section">
+                            <h6><i class="fas fa-check-circle"></i> Standard Output</h6>
+                            <div class="code-block success-output">
+${outputData.stdout}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${outputData.stderr ? `
+                        <div class="output-section">
+                            <h6><i class="fas fa-exclamation-triangle"></i> Standard Error</h6>
+                            <div class="code-block error-output">
+${outputData.stderr}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${outputData.error ? `
+                        <div class="output-section">
+                            <h6><i class="fas fa-times-circle"></i> Error</h6>
+                            <div class="alert alert-danger">
+                                ${outputData.error}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        <div class="mt-4 text-center">
+                            <button class="btn btn-secondary" onclick="window.close()">
+                                <i class="fas fa-times"></i> Đóng
+                            </button>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `;
+
+            popup.document.write(htmlContent);
+            popup.document.close();
         }
 
         // Copy to clipboard helper
