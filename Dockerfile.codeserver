@@ -75,9 +75,6 @@ RUN code-server --install-extension formulahendry.code-runner
 # Prettier - Code formatter
 RUN code-server --install-extension esbenp.prettier-vscode || true
 
-# GitLens
-RUN code-server --install-extension eamodio.gitlens || true
-
 # Bracket Pair Colorizer
 RUN code-server --install-extension coenraads.bracket-pair-colorizer-2 || true
 
