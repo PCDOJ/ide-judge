@@ -13,7 +13,18 @@
     "code-runner.clearPreviousOutput": true,
     "code-runner.showExecutionMessage": true,
     "code-runner.preserveFocus": false,
-    "terminal.integrated.defaultProfile.linux": "bash",
+    "terminal.integrated.defaultProfile.linux": "restricted-bash",
+    "terminal.integrated.profiles.linux": {
+        "restricted-bash": {
+            "path": "/usr/local/bin/restricted-bash-wrapper.sh",
+            "args": [],
+            "icon": "shield"
+        },
+        "bash": {
+            "path": "/bin/bash",
+            "args": []
+        }
+    },
     "files.autoSave": "afterDelay",
     "files.autoSaveDelay": 1000,
     "editor.fontSize": 14,
