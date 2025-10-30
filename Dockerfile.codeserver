@@ -58,6 +58,10 @@ RUN mkdir -p /home/coder/.local/share/code-server/extensions && \
 COPY code-server-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/code-server-entrypoint.sh
 
+# Copy restricted shell wrapper
+COPY restricted-shell.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/restricted-shell.sh
+
 # Copy VSCode settings
 COPY code-server-settings.json /home/coder/.local/share/code-server/User/settings.json
 RUN chown coder:coder /home/coder/.local/share/code-server/User/settings.json
@@ -74,9 +78,6 @@ RUN code-server --install-extension formulahendry.code-runner
 
 # Prettier - Code formatter
 RUN code-server --install-extension esbenp.prettier-vscode || true
-
-# GitLens
-RUN code-server --install-extension eamodio.gitlens || true
 
 # Bracket Pair Colorizer
 RUN code-server --install-extension coenraads.bracket-pair-colorizer-2 || true
