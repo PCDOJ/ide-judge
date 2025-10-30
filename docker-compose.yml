@@ -71,6 +71,28 @@ services:
     environment:
       - REDIS_HOST=judge0-redis
       - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - POSTGRES_HOST=judge0-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-judge0}
+      - POSTGRES_USER=${POSTGRES_USER:-judge0}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    networks:
+      - ide-judge-network
+
+  judge0-worker:
+    image: judge0/judge0:1.13.0
+    container_name: ide-judge-judge0-worker
+    restart: always
+    privileged: true
+    command: ["./scripts/workers"]
+    environment:
+      - REDIS_HOST=judge0-redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
       - POSTGRES_HOST=judge0-db
       - POSTGRES_PORT=5432
       - POSTGRES_DB=${POSTGRES_DB:-judge0}
@@ -104,7 +126,7 @@ services:
     image: redis:6
     container_name: ide-judge-judge0-redis
     restart: always
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --protected-mode no
     volumes:
       - judge0-redis-data:/data
     networks:

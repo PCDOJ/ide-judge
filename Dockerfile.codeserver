@@ -49,15 +49,40 @@ RUN mkdir -p /workspace && \
     chown -R coder:coder /workspace && \
     chmod -R 777 /workspace
 
+# Create extensions and config directories
+RUN mkdir -p /home/coder/.local/share/code-server/extensions && \
+    mkdir -p /home/coder/.local/share/code-server/User && \
+    chown -R coder:coder /home/coder/.local
+
 # Copy entrypoint script
 COPY code-server-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/code-server-entrypoint.sh
+
+# Copy VSCode settings
+COPY code-server-settings.json /home/coder/.local/share/code-server/User/settings.json
+RUN chown coder:coder /home/coder/.local/share/code-server/User/settings.json
 
 # Set working directory
 WORKDIR /workspace
 
 # Switch back to coder user
 USER coder
+
+# Install VSCode extensions from Open VSX Registry
+# Code Runner: Run code with shortcuts
+RUN code-server --install-extension formulahendry.code-runner
+
+# Prettier - Code formatter
+RUN code-server --install-extension esbenp.prettier-vscode || true
+
+# GitLens
+RUN code-server --install-extension eamodio.gitlens || true
+
+# Bracket Pair Colorizer
+RUN code-server --install-extension coenraads.bracket-pair-colorizer-2 || true
+
+# Material Icon Theme
+RUN code-server --install-extension pkief.material-icon-theme || true
 
 # Expose code-server port
 EXPOSE 8080
