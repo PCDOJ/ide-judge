@@ -1,0 +1,203 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "C++: Build (C++14)",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+                "-std=c++14",
+                "-Wall",
+                "-Wextra",
+                "-O2",
+                "${file}",
+                "-o",
+                "${fileDirname}/${fileBasenameNoExtension}"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "C++: Build (C++17)",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+                "-std=c++17",
+                "-Wall",
+                "-Wextra",
+                "-O2",
+                "${file}",
+                "-o",
+                "${fileDirname}/${fileBasenameNoExtension}"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "C++: Build (C++20)",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+                "-std=c++20",
+                "-Wall",
+                "-Wextra",
+                "-O2",
+                "${file}",
+                "-o",
+                "${fileDirname}/${fileBasenameNoExtension}"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "C++: Build (C++23)",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+                "-std=c++23",
+                "-Wall",
+                "-Wextra",
+                "-O2",
+                "${file}",
+                "-o",
+                "${fileDirname}/${fileBasenameNoExtension}"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "C++: Build and Run (C++14)",
+            "type": "shell",
+            "command": "g++ -std=c++14 -Wall -Wextra -O2 ${file} -o ${fileDirname}/${fileBasenameNoExtension} && ${fileDirname}/${fileBasenameNoExtension}",
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": true
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "C++: Build and Run (C++17)",
+            "type": "shell",
+            "command": "g++ -std=c++17 -Wall -Wextra -O2 ${file} -o ${fileDirname}/${fileBasenameNoExtension} && ${fileDirname}/${fileBasenameNoExtension}",
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": true
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "C++: Build and Run (C++20)",
+            "type": "shell",
+            "command": "g++ -std=c++20 -Wall -Wextra -O2 ${file} -o ${fileDirname}/${fileBasenameNoExtension} && ${fileDirname}/${fileBasenameNoExtension}",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": true
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "C++: Build and Run (C++23)",
+            "type": "shell",
+            "command": "g++ -std=c++23 -Wall -Wextra -O2 ${file} -o ${fileDirname}/${fileBasenameNoExtension} && ${fileDirname}/${fileBasenameNoExtension}",
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": true
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "Python: Run",
+            "type": "shell",
+            "command": "python3",
+            "args": ["${file}"],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": true
+            }
+        },
+        {
+            "label": "Java: Compile",
+            "type": "shell",
+            "command": "javac",
+            "args": ["${file}"],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": ["$javac"]
+        },
+        {
+            "label": "Java: Run",
+            "type": "shell",
+            "command": "java",
+            "args": ["-cp", "${fileDirname}", "${fileBasenameNoExtension}"],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": true
+            }
+        },
+        {
+            "label": "Java: Compile and Run",
+            "type": "shell",
+            "command": "javac ${file} && java -cp ${fileDirname} ${fileBasenameNoExtension}",
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": true
+            },
+            "problemMatcher": ["$javac"]
+        },
+        {
+            "label": "Auto: Build and Run",
+            "type": "shell",
+            "command": "${workspaceFolder}/.vscode/auto-run.sh",
+            "args": ["${file}"],
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": true
+            }
+        }
+    ]
+}
+
