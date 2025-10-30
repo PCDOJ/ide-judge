@@ -25,6 +25,9 @@
                 <i class="fas fa-clock"></i>
                 <span id="time-remaining">--:--:--</span>
             </div>
+            <button class="btn-workspace btn-view-pdf" onclick="togglePDF()" id="view-pdf-btn" style="display: none;">
+                <i class="fas fa-file-pdf"></i> Đề bài
+            </button>
             <button class="btn-workspace btn-save" onclick="saveManually()">
                 <i class="fas fa-save"></i> Lưu
             </button>
@@ -53,10 +56,21 @@
         </div>
     </div>
 
-    <!-- Workspace Container -->
-    <div class="workspace-container">
-        <!-- Code-server iframe sẽ được load ở đây -->
-        <iframe id="workspace-iframe" class="workspace-iframe" src="about:blank"></iframe>
+    <!-- Split Container for PDF and Workspace -->
+    <div class="split-container">
+        <!-- PDF Panel -->
+        <div class="pdf-panel hidden" id="pdfPanel">
+            <iframe id="pdfViewer" class="pdf-viewer"></iframe>
+        </div>
+
+        <!-- Resize Handle -->
+        <div class="resize-handle hidden" id="resizeHandle"></div>
+
+        <!-- Workspace Container -->
+        <div class="workspace-container fullscreen" id="workspaceContainer">
+            <!-- Code-server iframe sẽ được load ở đây -->
+            <iframe id="workspace-iframe" class="workspace-iframe" src="about:blank"></iframe>
+        </div>
     </div>
 
     <!-- Loading Overlay -->
@@ -72,14 +86,29 @@
         let contestId = null;
         let problemId = null;
         let problemCode = null;
+        window.codeSaved = false; // Track if code has been saved
 
         // Initialize workspace khi page load
         window.addEventListener('DOMContentLoaded', async () => {
             // Get params from URL
             const urlParams = new URLSearchParams(window.location.search);
-            contestId = parseInt(urlParams.get('contestId')) || 1;
-            problemId = parseInt(urlParams.get('problemId')) || 1;
-            problemCode = urlParams.get('problemCode') || 'PROB001';
+            contestId = parseInt(urlParams.get('contestId'));
+            problemId = parseInt(urlParams.get('problemId'));
+            problemCode = urlParams.get('problemCode');
+
+            // Validate required parameters
+            if (!contestId || !problemId) {
+                alert('Thiếu thông tin contestId hoặc problemId. Vui lòng mở workspace từ trang exam.');
+                window.location.href = '/exams.html';
+                return;
+            }
+
+            // Set default problemCode if not provided
+            if (!problemCode) {
+                problemCode = 'PROB' + String(problemId).padStart(3, '0');
+            }
+
+            console.log('[Workspace] Initialized with:', { contestId, problemId, problemCode });
 
             // Update UI
             document.getElementById('problem-code').textContent = problemCode;
@@ -120,6 +149,9 @@
 
                 // Start timer
                 startTimer(session);
+
+                // Show PDF button (always show since all problems should have PDF)
+                document.getElementById('view-pdf-btn').style.display = 'inline-block';
 
                 // Hide loading overlay
                 document.getElementById('loading-overlay').style.display = 'none';
@@ -168,12 +200,37 @@
         // Save manually
         async function saveManually() {
             try {
+                // Sync files to server first
                 await workspaceClient.syncToServer();
+
+                // Save code to submission
+                const response = await fetch('/api/workspace/save-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId: workspaceClient.sessionId,
+                        contestId: contestId,
+                        problemId: problemId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.message);
+                }
+
                 await loadFileList();
-                alert('Đã lưu thành công!');
+
+                // Show success notification
+                showNotification('success', 'Đã lưu thành công!');
+
+                // Mark as saved
+                window.codeSaved = true;
+
             } catch (error) {
                 console.error('Save error:', error);
-                alert('Lưu thất bại: ' + error.message);
+                showNotification('error', 'Lưu thất bại: ' + error.message);
             }
         }
 
@@ -186,10 +243,10 @@
             try {
                 const result = await workspaceClient.submitCode();
                 alert(`Nộp bài thành công!\n\nSố files: ${result.filesCount}\nFile chính: ${result.mainFile}`);
-                
+
                 // Redirect về trang exam
                 setTimeout(() => {
-                    window.location.href = `/exam-detail.html?id=${contestId}`;
+                    window.location.href = `/exam-view.html?id=${contestId}`;
                 }, 2000);
 
             } catch (error) {
@@ -198,11 +255,89 @@
             }
         }
 
+        // Toggle PDF panel
+        function togglePDF() {
+            const pdfPanel = document.getElementById('pdfPanel');
+            const workspaceContainer = document.getElementById('workspaceContainer');
+            const resizeHandle = document.getElementById('resizeHandle');
+            const toggleBtn = document.getElementById('view-pdf-btn');
+            const pdfViewer = document.getElementById('pdfViewer');
+
+            if (pdfPanel.classList.contains('hidden')) {
+                // Show PDF
+                pdfPanel.classList.remove('hidden');
+                workspaceContainer.classList.remove('fullscreen');
+                resizeHandle.classList.remove('hidden');
+                pdfPanel.style.width = '50%';
+                workspaceContainer.style.width = '50%';
+                toggleBtn.innerHTML = '<i class="fas fa-file-pdf"></i> Ẩn đề';
+
+                // Load PDF if not loaded yet
+                if (!pdfViewer.src || pdfViewer.src === 'about:blank') {
+                    pdfViewer.src = `/api/user/problems/${problemId}/pdf#zoom=100`;
+                }
+            } else {
+                // Hide PDF
+                pdfPanel.classList.add('hidden');
+                pdfPanel.style.width = '0';
+                workspaceContainer.classList.add('fullscreen');
+                workspaceContainer.style.width = '100%';
+                resizeHandle.classList.add('hidden');
+                toggleBtn.innerHTML = '<i class="fas fa-file-pdf"></i> Đề bài';
+            }
+        }
+
         // Go back
         function goBack() {
-            if (confirm('Bạn có chắc muốn thoát? Code sẽ được tự động lưu.')) {
-                window.location.href = `/exam-detail.html?id=${contestId}`;
+            console.log('[Workspace] goBack() called, contestId:', contestId);
+
+            // Validate contestId before redirect
+            if (!contestId) {
+                console.error('[Workspace] contestId is undefined, redirecting to exams.html');
+                window.location.href = '/exams.html';
+                return;
             }
+
+            const redirectUrl = `/exam-view.html?id=${contestId}`;
+            console.log('[Workspace] Redirecting to:', redirectUrl);
+
+            // Nếu đã lưu thì không hỏi lại
+            if (window.codeSaved) {
+                window.location.href = redirectUrl;
+                return;
+            }
+
+            // Nếu chưa lưu thì hỏi
+            if (confirm('Bạn có chắc muốn thoát? Code chưa được lưu.')) {
+                window.location.href = redirectUrl;
+            }
+        }
+
+        // Show notification
+        function showNotification(type, message) {
+            // Tạo notification element
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.innerHTML = `
+                <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
+                <span>${message}</span>
+            `;
+
+            // Thêm vào body
+            document.body.appendChild(notification);
+
+            // Hiện notification
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 100);
+
+            // Ẩn sau 3 giây
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            }, 3000);
         }
 
         // Toggle sidebar
@@ -254,6 +389,40 @@
                 workspaceClient.destroy();
             }
         });
+
+        // Resize handle functionality
+        (function initResizeHandle() {
+            const resizeHandle = document.getElementById('resizeHandle');
+            const pdfPanel = document.getElementById('pdfPanel');
+            const workspaceContainer = document.getElementById('workspaceContainer');
+            let isResizing = false;
+
+            resizeHandle.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                document.body.style.cursor = 'col-resize';
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+
+                const containerWidth = document.querySelector('.split-container').offsetWidth;
+                const newPdfWidth = (e.clientX / containerWidth) * 100;
+
+                // Giới hạn width từ 20% đến 80%
+                if (newPdfWidth >= 20 && newPdfWidth <= 80) {
+                    pdfPanel.style.width = newPdfWidth + '%';
+                    workspaceContainer.style.width = (100 - newPdfWidth) + '%';
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isResizing) {
+                    isResizing = false;
+                    document.body.style.cursor = 'default';
+                }
+            });
+        })();
     </script>
 </body>
 </html>
