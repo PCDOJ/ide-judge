@@ -28,6 +28,9 @@
             <button class="btn-workspace btn-view-pdf" onclick="togglePDF()" id="view-pdf-btn" style="display: none;">
                 <i class="fas fa-file-pdf"></i> Đề bài
             </button>
+            <button class="btn-workspace btn-run" onclick="showRunCodeModal()" style="background: #28a745;">
+                <i class="fas fa-play"></i> Run Code
+            </button>
             <button class="btn-workspace btn-save" onclick="saveManually()">
                 <i class="fas fa-save"></i> Lưu
             </button>
@@ -49,7 +52,12 @@
     <div class="file-list-sidebar" id="file-sidebar">
         <div class="sidebar-header">
             <span>Files</span>
-            <span id="files-count">0</span>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button onclick="refreshFileList()" class="btn-refresh-files" title="Refresh file list">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+                <span id="files-count">0</span>
+            </div>
         </div>
         <div id="file-list">
             <!-- Files will be loaded here -->
@@ -78,6 +86,54 @@
         <div class="spinner"></div>
         <div class="loading-text">Đang khởi tạo workspace...</div>
     </div>
+
+    <!-- Run Code Modal -->
+    <div class="modal fade" id="runCodeModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-play"></i> Run Code
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Chọn file cần run:</label>
+                        <select class="form-select" id="file-selector">
+                            <option value="">-- Chọn file --</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Ngôn ngữ: <strong id="detected-language">-</strong></label>
+                    </div>
+                    <div class="mb-3" id="cpp-version-selector" style="display: none;">
+                        <label class="form-label">C++ Version:</label>
+                        <select class="form-select" id="cpp-version">
+                            <option value="c++14">C++14</option>
+                            <option value="c++17">C++17</option>
+                            <option value="c++20" selected>C++20 (Default)</option>
+                            <option value="c++23">C++23</option>
+                        </select>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        Code sẽ được compile và run trong VSCode terminal. Vui lòng kiểm tra terminal để xem kết quả.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-success" onclick="runCode()">
+                        <i class="fas fa-play"></i> Run
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <script src="/js/workspace-client.js"></script>
     <script>
@@ -147,6 +203,9 @@
                 // Load file list
                 await loadFileList();
 
+                // Start auto-refresh file list
+                startAutoRefresh();
+
                 // Start timer
                 startTimer(session);
 
@@ -181,8 +240,13 @@
                     data.files.forEach(file => {
                         const fileItem = document.createElement('div');
                         fileItem.className = 'file-item' + (file.is_main_file ? ' main-file' : '');
+
+                        // Lấy icon và màu dựa trên đuôi file thực tế
+                        const fileIcon = getFileIcon(file.file_name);
+                        const fileColor = getFileColor(file.file_name);
+
                         fileItem.innerHTML = `
-                            <i class="fas fa-file-code file-icon"></i>
+                            <i class="${fileIcon} file-icon" style="color: ${fileColor};"></i>
                             <span class="file-name">${file.file_name}</span>
                             <span class="file-size">(${formatFileSize(file.file_size)})</span>
                         `;
@@ -195,6 +259,50 @@
             } catch (error) {
                 console.error('Load file list error:', error);
             }
+        }
+
+        // Helper: Lấy icon cho file dựa trên extension
+        function getFileIcon(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const iconMap = {
+                'cpp': 'fab fa-cuttlefish',
+                'c': 'fab fa-cuttlefish',
+                'h': 'fas fa-file-code',
+                'hpp': 'fas fa-file-code',
+                'py': 'fab fa-python',
+                'java': 'fab fa-java',
+                'js': 'fab fa-js-square',
+                'ts': 'fas fa-file-code',
+                'go': 'fas fa-file-code',
+                'rs': 'fas fa-file-code',
+                'txt': 'fas fa-file-alt',
+                'md': 'fab fa-markdown',
+                'json': 'fas fa-file-code',
+                'sh': 'fas fa-terminal'
+            };
+            return iconMap[ext] || 'fas fa-file-code';
+        }
+
+        // Helper: Lấy màu cho file dựa trên extension
+        function getFileColor(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const colorMap = {
+                'cpp': '#00599C',
+                'c': '#555555',
+                'h': '#A8B9CC',
+                'hpp': '#A8B9CC',
+                'py': '#3776AB',
+                'java': '#007396',
+                'js': '#F7DF1E',
+                'ts': '#3178C6',
+                'go': '#00ADD8',
+                'rs': '#CE422B',
+                'txt': '#6c757d',
+                'md': '#083FA1',
+                'json': '#292929',
+                'sh': '#4EAA25'
+            };
+            return colorMap[ext] || '#667eea';
         }
 
         // Save manually
@@ -346,6 +454,98 @@
             sidebar.classList.toggle('collapsed');
         }
 
+        // Refresh file list manually
+        async function refreshFileList() {
+            try {
+                const btn = event.target.closest('.btn-refresh-files');
+                const icon = btn.querySelector('i');
+
+                // Add spinning animation
+                icon.classList.add('fa-spin');
+                btn.disabled = true;
+
+                const response = await fetch('/api/workspace/refresh-files', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId: workspaceClient.sessionId,
+                        contestId: contestId,
+                        problemId: problemId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.message);
+                }
+
+                // Update file list UI
+                const fileList = document.getElementById('file-list');
+                fileList.innerHTML = '';
+
+                if (data.files.length === 0) {
+                    fileList.innerHTML = '<div style="padding: 15px; color: #6c757d; text-align: center;">Chưa có file nào</div>';
+                } else {
+                    data.files.forEach(file => {
+                        const fileItem = document.createElement('div');
+                        fileItem.className = 'file-item' + (file.is_main_file ? ' main-file' : '');
+
+                        const fileIcon = getFileIcon(file.file_name);
+                        const fileColor = getFileColor(file.file_name);
+
+                        fileItem.innerHTML = `
+                            <i class="${fileIcon} file-icon" style="color: ${fileColor};"></i>
+                            <span class="file-name">${file.file_name}</span>
+                            <span class="file-size">(${formatFileSize(file.file_size)})</span>
+                        `;
+                        fileList.appendChild(fileItem);
+                    });
+                }
+
+                document.getElementById('files-count').textContent = data.files.length;
+
+                console.log('[Workspace] File list refreshed:', data.filesCount, 'files');
+
+            } catch (error) {
+                console.error('Refresh file list error:', error);
+                showNotification('error', 'Không thể refresh file list: ' + error.message);
+            } finally {
+                // Remove spinning animation
+                const btn = event.target.closest('.btn-refresh-files');
+                const icon = btn.querySelector('i');
+                icon.classList.remove('fa-spin');
+                btn.disabled = false;
+            }
+        }
+
+        // Auto-refresh file list every 5 seconds
+        let autoRefreshInterval = null;
+        function startAutoRefresh() {
+            // Clear existing interval if any
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+
+            // Refresh every 5 seconds
+            autoRefreshInterval = setInterval(async () => {
+                try {
+                    await loadFileList();
+                } catch (error) {
+                    console.error('Auto-refresh error:', error);
+                }
+            }, 5000);
+
+            console.log('[Workspace] Auto-refresh started (every 5 seconds)');
+        }
+
+        // Stop auto-refresh when leaving page
+        window.addEventListener('beforeunload', () => {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        });
+
         // Start timer
         function startTimer(session) {
             // TODO: Implement countdown timer based on session.expiresAt
@@ -389,6 +589,229 @@
                 workspaceClient.destroy();
             }
         });
+
+        // Show Run Code Modal
+        async function showRunCodeModal() {
+            try {
+                // Get files to populate dropdown
+                const response = await fetch(`/api/workspace/files/${contestId}/${problemId}`);
+                const data = await response.json();
+
+                if (!data.success || data.files.length === 0) {
+                    alert('Không tìm thấy file code. Vui lòng tạo file trước.');
+                    return;
+                }
+
+                // Populate file selector
+                const fileSelector = document.getElementById('file-selector');
+                fileSelector.innerHTML = '<option value="">-- Chọn file --</option>';
+
+                // Filter code files only
+                const codeExtensions = ['cpp', 'c', 'py', 'java', 'js', 'go', 'rs'];
+                const codeFiles = data.files.filter(f => {
+                    const ext = f.file_name.split('.').pop().toLowerCase();
+                    return codeExtensions.includes(ext);
+                });
+
+                if (codeFiles.length === 0) {
+                    alert('Không tìm thấy file code hợp lệ.');
+                    return;
+                }
+
+                // Add files to dropdown
+                codeFiles.forEach(file => {
+                    const option = document.createElement('option');
+                    option.value = file.file_name;
+                    option.textContent = file.file_name;
+                    if (file.is_main_file) {
+                        option.textContent += ' (Main)';
+                        option.selected = true;
+                    }
+                    fileSelector.appendChild(option);
+                });
+
+                // Auto-select first file if no main file
+                if (!codeFiles.find(f => f.is_main_file)) {
+                    fileSelector.selectedIndex = 1; // Skip "-- Chọn file --"
+                }
+
+                // Update language when file changes
+                fileSelector.addEventListener('change', updateLanguageDisplay);
+
+                // Initial language display
+                updateLanguageDisplay();
+
+                // Show modal
+                const modal = new bootstrap.Modal(document.getElementById('runCodeModal'));
+                modal.show();
+
+            } catch (error) {
+                console.error('Error showing run modal:', error);
+                alert('Lỗi khi mở modal: ' + error.message);
+            }
+        }
+
+        // Update language display based on selected file
+        function updateLanguageDisplay() {
+            const fileSelector = document.getElementById('file-selector');
+            const selectedFile = fileSelector.value;
+
+            if (!selectedFile) {
+                document.getElementById('detected-language').textContent = '-';
+                document.getElementById('cpp-version-selector').style.display = 'none';
+                return;
+            }
+
+            const ext = selectedFile.split('.').pop().toLowerCase();
+
+            // Detect language
+            const languageMap = {
+                'cpp': 'C++',
+                'c': 'C',
+                'py': 'Python',
+                'java': 'Java',
+                'js': 'JavaScript',
+                'go': 'Go',
+                'rs': 'Rust'
+            };
+
+            const language = languageMap[ext] || 'Unknown';
+            document.getElementById('detected-language').textContent = language;
+
+            // Show C++ version selector only for C++
+            const cppSelector = document.getElementById('cpp-version-selector');
+            if (ext === 'cpp' || ext === 'c') {
+                cppSelector.style.display = 'block';
+            } else {
+                cppSelector.style.display = 'none';
+            }
+        }
+
+        // Run Code
+        async function runCode() {
+            try {
+                const fileSelector = document.getElementById('file-selector');
+                const selectedFile = fileSelector.value;
+
+                if (!selectedFile) {
+                    alert('Vui lòng chọn file cần run.');
+                    return;
+                }
+
+                const cppVersion = document.getElementById('cpp-version').value;
+
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('runCodeModal'));
+                modal.hide();
+
+                // Show loading
+                showNotification('info', 'Đang tạo script chạy code...');
+
+                // Call API to create run script
+                const response = await fetch('/api/workspace/run-code', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        contestId: contestId,
+                        problemId: problemId,
+                        fileName: selectedFile,
+                        cppVersion: cppVersion
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    alert('Lỗi: ' + data.message);
+                    return;
+                }
+
+                // Show success with command
+                const command = data.data.scriptPath;
+                const fullCommand = data.data.command;
+
+                // Create a nice notification with copy button
+                const notificationHtml = `
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 10px;">
+                        <div style="margin-bottom: 10px;">
+                            <strong>✅ Script đã được tạo!</strong>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <strong>File:</strong> ${data.data.fileName} (${data.data.language})
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <strong>Lệnh compile & run:</strong>
+                            <div style="background: #2d2d2d; color: #f8f8f2; padding: 10px; border-radius: 4px; font-family: monospace; margin-top: 5px; overflow-x: auto;">
+                                ${fullCommand}
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <strong>Cách chạy:</strong>
+                        </div>
+                        <ol style="margin: 0; padding-left: 20px;">
+                            <li>Mở Terminal trong VSCode (Ctrl + \`)</li>
+                            <li>Chạy lệnh: <code style="background: #e9ecef; padding: 2px 6px; border-radius: 3px;">${command}</code></li>
+                        </ol>
+                        <div style="margin-top: 10px;">
+                            <button onclick="copyToClipboard('${command}')" style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                                📋 Copy lệnh
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                // Show in a custom modal or notification
+                showCustomNotification('Run Code', notificationHtml);
+
+            } catch (error) {
+                console.error('Run code error:', error);
+                alert('Lỗi khi chạy code: ' + error.message);
+            }
+        }
+
+        // Copy to clipboard helper
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showNotification('success', '✅ Đã copy lệnh vào clipboard!');
+            }).catch(err => {
+                console.error('Copy failed:', err);
+                alert('Không thể copy. Vui lòng copy thủ công: ' + text);
+            });
+        }
+
+        // Show custom notification
+        function showCustomNotification(title, htmlContent) {
+            // Create modal if not exists
+            let customModal = document.getElementById('customNotificationModal');
+            if (!customModal) {
+                customModal = document.createElement('div');
+                customModal.id = 'customNotificationModal';
+                customModal.className = 'modal fade';
+                customModal.innerHTML = `
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="customNotificationTitle"></h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body" id="customNotificationBody"></div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(customModal);
+            }
+
+            document.getElementById('customNotificationTitle').textContent = title;
+            document.getElementById('customNotificationBody').innerHTML = htmlContent;
+
+            const modal = new bootstrap.Modal(customModal);
+            modal.show();
+        }
 
         // Resize handle functionality
         (function initResizeHandle() {
