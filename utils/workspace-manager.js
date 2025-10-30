@@ -24,14 +24,15 @@ class WorkspaceManager {
 
     /**
      * Tạo hoặc lấy workspace session
-     * @param {number} userId 
-     * @param {string} username 
-     * @param {number} contestId 
-     * @param {number} problemId 
+     * @param {number} userId
+     * @param {string} username
+     * @param {number} contestId
+     * @param {number} problemId
      * @param {string} problemCode - Mã bài (ví dụ: PROB001)
+     * @param {string} pdfPath - Đường dẫn đến file PDF đề bài
      * @returns {Promise<Object>} Session info
      */
-    async createOrGetSession(userId, username, contestId, problemId, problemCode) {
+    async createOrGetSession(userId, username, contestId, problemId, problemCode, pdfPath = null) {
         try {
             // Tạo workspace path
             const workspacePath = this.getWorkspacePath(username, contestId, problemId);
@@ -77,7 +78,7 @@ class WorkspaceManager {
             }
 
             // Tạo workspace folder structure
-            await this.createWorkspaceStructure(workspacePath, problemCode);
+            await this.createWorkspaceStructure(workspacePath, problemCode, pdfPath);
 
             return {
                 sessionId: session.id,
@@ -101,7 +102,7 @@ class WorkspaceManager {
     /**
      * Tạo folder structure và file template
      */
-    async createWorkspaceStructure(workspacePath, problemCode) {
+    async createWorkspaceStructure(workspacePath, problemCode, pdfPath = null) {
         try {
             const fullPath = path.join(this.workspaceRoot, workspacePath);
 
@@ -349,6 +350,10 @@ class WorkspaceManager {
 
     getReadmeTemplate(problemCode) {
         return `# Problem: ${problemCode}
+
+## 📄 Xem Đề Bài
+- Click nút "Xem đề bài" trên thanh công cụ để xem đề bài chi tiết
+- Đề bài sẽ hiển thị trong modal, không cần mở tab mới
 
 ## Instructions
 - Create your solution in the main file: **${problemCode}.cpp** (or .py, .java)

@@ -1,8 +1,12 @@
 // Get exam ID from URL
 const urlParams = new URLSearchParams(window.location.search);
-const examId = urlParams.get('examId');
+// Support both 'id' and 'examId' parameters for backward compatibility
+const examId = urlParams.get('id') || urlParams.get('examId');
+
+console.log('[ExamView] URL params:', { id: urlParams.get('id'), examId: urlParams.get('examId'), finalExamId: examId });
 
 if (!examId) {
+    console.error('[ExamView] No examId found in URL, redirecting to exams.html');
     window.location.href = '/exams.html';
 }
 

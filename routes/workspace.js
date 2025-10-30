@@ -10,6 +10,40 @@ const { isAuthenticated } = require('../middleware/auth');
 const db = require('../config/database');
 
 /**
+ * Helper function to detect language ID from filename
+ */
+function detectLanguageId(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const languageMap = {
+        'cpp': 54,  // C++ (GCC 9.2.0)
+        'c': 50,    // C (GCC 9.2.0)
+        'py': 71,   // Python 3
+        'java': 62, // Java (OpenJDK 13.0.1)
+        'js': 63,   // JavaScript (Node.js 12.14.0)
+        'go': 60,   // Go (1.13.5)
+        'rs': 73    // Rust (1.40.0)
+    };
+    return languageMap[ext] || 54; // Default to C++
+}
+
+/**
+ * Helper function to detect language name from filename
+ */
+function detectLanguageName(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const languageMap = {
+        'cpp': 'C++',
+        'c': 'C',
+        'py': 'Python',
+        'java': 'Java',
+        'js': 'JavaScript',
+        'go': 'Go',
+        'rs': 'Rust'
+    };
+    return languageMap[ext] || 'C++'; // Default to C++
+}
+
+/**
  * POST /api/workspace/create
  * Tạo hoặc lấy workspace session
  */
@@ -39,9 +73,9 @@ router.post('/create', isAuthenticated, async (req, res) => {
             });
         }
 
-        // Lấy problem code
+        // Lấy problem code và PDF path
         const [problems] = await db.query(`
-            SELECT problem_code FROM exam_problems
+            SELECT problem_code, pdf_path FROM exam_problems
             WHERE id = ? AND exam_id = ?
         `, [problemId, contestId]);
 
@@ -53,6 +87,7 @@ router.post('/create', isAuthenticated, async (req, res) => {
         }
 
         const problemCode = problems[0].problem_code;
+        const pdfPath = problems[0].pdf_path;
 
         // Tạo hoặc lấy session
         const session = await workspaceManager.createOrGetSession(
@@ -60,7 +95,8 @@ router.post('/create', isAuthenticated, async (req, res) => {
             username,
             contestId,
             problemId,
-            problemCode
+            problemCode,
+            pdfPath
         );
 
         res.json({
@@ -172,6 +208,100 @@ router.get('/files/:contestId/:problemId', isAuthenticated, async (req, res) => 
 });
 
 /**
+ * POST /api/workspace/save-code
+ * Lưu code từ workspace (không submit)
+ */
+router.post('/save-code', isAuthenticated, async (req, res) => {
+    try {
+        const { sessionId, contestId, problemId } = req.body;
+        const userId = req.session.userId;
+
+        // Sync files trước
+        const [problems] = await db.query(`
+            SELECT problem_code FROM exam_problems WHERE id = ?
+        `, [problemId]);
+
+        const problemCode = problems[0]?.problem_code || 'PROBLEM';
+
+        const syncResult = await workspaceManager.syncFilesToDatabase(
+            sessionId,
+            userId,
+            contestId,
+            problemId,
+            problemCode
+        );
+
+        // Lấy files đã sync
+        const files = await workspaceManager.getFilesFromDatabase(
+            userId,
+            contestId,
+            problemId
+        );
+
+        if (files.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No files to save'
+            });
+        }
+
+        // Tìm main file
+        const mainFile = files.find(f => f.is_main_file) || files[0];
+
+        // Detect language
+        const languageId = detectLanguageId(mainFile.file_name);
+        const languageName = detectLanguageName(mainFile.file_name);
+
+        // Lưu vào code_submissions với status 'draft'
+        await db.query(`
+            INSERT INTO code_submissions
+            (user_id, exam_id, problem_id, source_code, language_id, language_name, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'draft')
+            ON DUPLICATE KEY UPDATE
+                source_code = VALUES(source_code),
+                language_id = VALUES(language_id),
+                language_name = VALUES(language_name),
+                updated_at = CURRENT_TIMESTAMP
+        `, [
+            userId,
+            contestId,
+            problemId,
+            mainFile.file_content, // Lưu file_content của main file
+            languageId,
+            languageName
+        ]);
+
+        // Get submission id
+        const [submission] = await db.query(
+            'SELECT id FROM code_submissions WHERE user_id = ? AND exam_id = ? AND problem_id = ?',
+            [userId, contestId, problemId]
+        );
+
+        // Log to history
+        await db.query(`
+            INSERT INTO submission_history (submission_id, user_id, exam_id, problem_id, source_code, language_id, language_name, action_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'save')
+        `, [submission[0].id, userId, contestId, problemId, mainFile.content, languageId, languageName]);
+
+        res.json({
+            success: true,
+            message: 'Code saved successfully',
+            filesCount: files.length,
+            mainFile: mainFile.file_name,
+            source: 'workspace'
+        });
+
+    } catch (error) {
+        console.error('[Workspace API] Save code error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to save code',
+            error: error.message
+        });
+    }
+});
+
+/**
  * POST /api/workspace/submit
  * Submit code (sync + mark as submitted)
  */
@@ -212,6 +342,10 @@ router.post('/submit', isAuthenticated, async (req, res) => {
         // Tìm main file
         const mainFile = files.find(f => f.is_main_file) || files[0];
 
+        // Detect language
+        const languageId = detectLanguageId(mainFile.file_name);
+        const languageName = detectLanguageName(mainFile.file_name);
+
         // Lưu vào code_submissions
         await db.query(`
             INSERT INTO code_submissions
@@ -219,15 +353,17 @@ router.post('/submit', isAuthenticated, async (req, res) => {
             VALUES (?, ?, ?, ?, ?, ?, 'submitted', NOW())
             ON DUPLICATE KEY UPDATE
                 source_code = VALUES(source_code),
+                language_id = VALUES(language_id),
+                language_name = VALUES(language_name),
                 status = 'submitted',
                 submitted_at = NOW()
         `, [
             userId,
             contestId,
             problemId,
-            JSON.stringify(files), // Lưu tất cả files dưới dạng JSON
-            this.detectLanguageId(mainFile.file_name),
-            this.detectLanguageName(mainFile.file_name)
+            mainFile.file_content, // Lưu file_content của main file
+            languageId,
+            languageName
         ]);
 
         // Log sync as submit
