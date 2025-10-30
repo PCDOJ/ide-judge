@@ -58,11 +58,15 @@ RUN mkdir -p /home/coder/.local/share/code-server/extensions && \
 COPY code-server-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/code-server-entrypoint.sh
 
-# Copy restricted shell wrapper
+# Copy restricted shell wrapper (for API terminal execution)
 COPY restricted-shell.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/restricted-shell.sh
 
-# Copy VSCode settings
+# Copy restricted bash wrapper (for code-server built-in terminal)
+COPY restricted-bash-wrapper.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/restricted-bash-wrapper.sh
+
+# Copy VSCode settings (includes terminal profile configuration)
 COPY code-server-settings.json /home/coder/.local/share/code-server/User/settings.json
 RUN chown coder:coder /home/coder/.local/share/code-server/User/settings.json
 
