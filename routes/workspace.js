@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const workspaceManager = require('../utils/workspace-manager');
 const fileWatcher = require('../utils/workspace-file-watcher');
+const commandValidator = require('../utils/command-validator');
 const { isAuthenticated } = require('../middleware/auth');
 const db = require('../config/database');
 
@@ -989,6 +990,27 @@ router.post('/execute-in-terminal', isAuthenticated, async (req, res) => {
         const username = req.session.username;
         const workspacePath = `/workspace/${username}/contest_${contestId}/problem_${problemId}`;
 
+        // ===== COMMAND VALIDATION LAYER =====
+        // Validate command trước khi execute
+        const validation = commandValidator.validate(command, workspacePath);
+
+        if (!validation.valid) {
+            console.log('[Execute in terminal] Command blocked:', command);
+            console.log('[Execute in terminal] Reason:', validation.reason);
+
+            return res.json({
+                success: false,
+                data: {
+                    stdout: '',
+                    stderr: `❌ Lệnh bị chặn: ${validation.reason}\n\nCác lệnh không được phép:\n- cd (di chuyển thư mục)\n- sudo (quyền root)\n- .. (truy cập thư mục cha)\n- Các lệnh nguy hiểm khác\n\nBạn chỉ được phép thao tác trong thư mục hiện tại.`,
+                    command: command,
+                    workspacePath: workspacePath,
+                    blocked: true,
+                    reason: validation.reason
+                }
+            });
+        }
+
         const { exec } = require('child_process');
         const util = require('util');
         const execPromise = util.promisify(exec);
@@ -996,11 +1018,12 @@ router.post('/execute-in-terminal', isAuthenticated, async (req, res) => {
         // Container name từ docker-compose
         const containerName = process.env.CODE_SERVER_CONTAINER || 'ide-judge-code-server';
 
-        // Tạo command để execute trong container
-        // Sử dụng bash -c để chạy command trong working directory
-        const dockerCommand = `docker exec -w ${workspacePath} ${containerName} bash -c "${command.replace(/"/g, '\\"')}"`;
+        // Tạo command để execute trong container với restricted shell wrapper
+        // Sử dụng restricted-shell.sh wrapper để hạn chế di chuyển thư mục
+        const dockerCommand = `docker exec -w ${workspacePath} ${containerName} /usr/local/bin/restricted-shell.sh "${command.replace(/"/g, '\\"')}"`;
 
         console.log('[Execute in terminal] Running:', dockerCommand);
+        console.log('[Execute in terminal] Validated command:', command);
 
         // Execute command
         const { stdout, stderr } = await execPromise(dockerCommand, {
