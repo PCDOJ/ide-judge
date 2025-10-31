@@ -16,6 +16,7 @@
     let currentExamId = null;
     let currentExamTitle = null;
     let currentExamEndTime = null;
+    let currentProblemId = null; // NEW: Track current problem being worked on
     let pageJustLoaded = true;
     let lastBlurTime = 0;
 
@@ -437,19 +438,26 @@
 
         // Log violation to server
         try {
+            const violationData = {
+                exam_id: currentExamId,
+                left_at: new Date(tabLeftTime).toISOString(),
+                violation_type: violationType
+            };
+
+            // Include problem_id if available (for workspace monitoring)
+            if (currentProblemId) {
+                violationData.problem_id = currentProblemId;
+            }
+
             const response = await fetch('/api/exam-violations/log', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    exam_id: currentExamId,
-                    left_at: new Date(tabLeftTime).toISOString(),
-                    violation_type: violationType
-                })
+                body: JSON.stringify(violationData)
             });
 
             const result = await response.json();
             if (result.success) {
-                console.log('[EXAM-MONITOR] ✓ Violation logged successfully:', violationType);
+                console.log('[EXAM-MONITOR] ✓ Violation logged successfully:', violationType, currentProblemId ? `(problem: ${currentProblemId})` : '');
             } else {
                 console.error('[EXAM-MONITOR] ✗ Server error:', result.message);
             }
@@ -534,6 +542,17 @@
         // Get current exam ID
         getCurrentExamId: function() {
             return currentExamId;
+        },
+
+        // Set current problem ID (for workspace monitoring)
+        setProblemId: function(problemId) {
+            currentProblemId = problemId;
+            console.log('[EXAM-MONITOR] Problem ID set to:', problemId);
+        },
+
+        // Get current problem ID
+        getProblemId: function() {
+            return currentProblemId;
         }
     };
 
