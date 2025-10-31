@@ -118,6 +118,84 @@
         .top-bar .btn {
             margin-left: 0.5rem;
         }
+
+        /* Monitoring Indicator */
+        .monitoring-panel {
+            display: none;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(238, 90, 111, 0.3);
+            margin-right: 12px;
+            font-size: 13px;
+            font-weight: 500;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .monitoring-panel.active {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .monitoring-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .monitoring-status i {
+            font-size: 16px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .time-info {
+            display: flex;
+            gap: 16px;
+            padding-left: 16px;
+            border-left: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .time-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .time-label {
+            font-size: 10px;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+        }
+
+        .time-value {
+            font-size: 14px;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 1px;
+        }
+
+        .countdown-warning {
+            color: #fff3cd !important;
+        }
+
+        .countdown-danger {
+            color: #ffcccc !important;
+            animation: blink 1s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
         .split-container {
             display: flex;
             height: calc(100vh - 60px);
@@ -206,8 +284,26 @@
 
     <!-- Top Bar -->
     <div class="top-bar">
-        <div>
+        <div style="display: flex; align-items: center; gap: 12px;">
             <h5 id="problemTitle"><i class="bi bi-code-square"></i> Loading...</h5>
+
+            <!-- Monitoring Panel -->
+            <div class="monitoring-panel" id="monitoringPanel">
+                <div class="monitoring-status">
+                    <i class="bi bi-shield-fill-check"></i>
+                    <span>ĐANG GIÁM SÁT</span>
+                </div>
+                <div class="time-info">
+                    <div class="time-item">
+                        <div class="time-label">Giờ hiện tại</div>
+                        <div class="time-value" id="currentTime">--:--:--</div>
+                    </div>
+                    <div class="time-item">
+                        <div class="time-label">Còn lại</div>
+                        <div class="time-value" id="countdown">--:--:--</div>
+                    </div>
+                </div>
+            </div>
         </div>
         <div>
             <span class="timer" id="timer">--:--:--</span>
@@ -384,6 +480,75 @@
             startAutoSave();
             startTimer();
             setupResizeHandle();
+            initMonitoringPanel(); // Initialize monitoring panel
+        }
+
+        // Initialize monitoring panel with clock and countdown
+        function initMonitoringPanel() {
+            // Check if monitoring is active
+            if (window.ExamMonitoring && window.ExamMonitoring.isActive()) {
+                const panel = document.getElementById('monitoringPanel');
+                if (panel) {
+                    panel.classList.add('active');
+
+                    // Hide old timer (UTC-based) when monitoring panel is shown
+                    const oldTimer = document.getElementById('timer');
+                    if (oldTimer) {
+                        oldTimer.style.display = 'none';
+                    }
+
+                    // Update clock every second
+                    updateClock();
+                    setInterval(updateClock, 1000);
+                }
+            }
+        }
+
+        // Update current time and countdown
+        function updateClock() {
+            // Update current time (UTC+7)
+            const now = new Date();
+            const utc7Time = new Date(now.getTime() + (7 * 60 * 60 * 1000));
+            const hours = String(utc7Time.getUTCHours()).padStart(2, '0');
+            const minutes = String(utc7Time.getUTCMinutes()).padStart(2, '0');
+            const seconds = String(utc7Time.getUTCSeconds()).padStart(2, '0');
+
+            const currentTimeEl = document.getElementById('currentTime');
+            if (currentTimeEl) {
+                currentTimeEl.textContent = `${hours}:${minutes}:${seconds}`;
+            }
+
+            // Update countdown
+            if (examData && examData.end_time) {
+                const endTime = new Date(examData.end_time);
+                const remaining = endTime - now;
+
+                const countdownEl = document.getElementById('countdown');
+                if (countdownEl) {
+                    if (remaining <= 0) {
+                        countdownEl.textContent = '00:00:00';
+                        countdownEl.classList.remove('countdown-warning');
+                        countdownEl.classList.add('countdown-danger');
+                    } else {
+                        const totalSeconds = Math.floor(remaining / 1000);
+                        const h = Math.floor(totalSeconds / 3600);
+                        const m = Math.floor((totalSeconds % 3600) / 60);
+                        const s = totalSeconds % 60;
+
+                        countdownEl.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+
+                        // Remove previous classes
+                        countdownEl.classList.remove('countdown-warning', 'countdown-danger');
+
+                        // Warning when less than 10 minutes
+                        if (remaining < 10 * 60 * 1000) {
+                            countdownEl.classList.add('countdown-danger');
+                        } else if (remaining < 30 * 60 * 1000) {
+                            countdownEl.classList.add('countdown-warning');
+                        }
+                    }
+                }
+            }
         }
 
         // Load exam data
@@ -413,14 +578,19 @@
         // Load problem data
         async function loadProblemData() {
             if (!examData) return;
-            
+
             problemData = examData.problems.find(p => p.id == problemId);
             if (problemData) {
-                document.getElementById('problemTitle').innerHTML = 
+                document.getElementById('problemTitle').innerHTML =
                     `<i class="bi bi-code-square"></i> ${problemData.problem_code} - ${problemData.problem_title}`;
-                
+
                 // Load PDF
                 document.getElementById('pdfViewer').src = `/api/user/problems/${problemId}/pdf`;
+
+                // Set problem ID for monitoring
+                if (window.ExamMonitoring && window.ExamMonitoring.isActive()) {
+                    window.ExamMonitoring.setProblemId(problemId);
+                }
             }
         }
 

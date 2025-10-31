@@ -72,6 +72,83 @@
     gap: 12px;
 }
 
+/* Monitoring Panel */
+.monitoring-panel {
+    display: none;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(238, 90, 111, 0.3);
+    font-size: 13px;
+    font-weight: 500;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.monitoring-panel.active {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.monitoring-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.monitoring-status i {
+    font-size: 16px;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.time-info {
+    display: flex;
+    gap: 16px;
+    padding-left: 16px;
+    border-left: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.time-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.time-label {
+    font-size: 10px;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+
+.time-value {
+    font-size: 14px;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 1px;
+}
+
+.countdown-warning {
+    color: #fff3cd !important;
+}
+
+.countdown-danger {
+    color: #ffcccc !important;
+    animation: blink 1s ease-in-out infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
 .workspace-toolbar .problem-info {
     font-size: 17px;
     font-weight: 600;
