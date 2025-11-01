@@ -107,11 +107,11 @@ class WorkspaceManager {
             const fullPath = path.join(this.workspaceRoot, workspacePath);
 
             // Tạo folder nếu chưa có
-            await fs.mkdir(fullPath, { recursive: true });
+            await fs.mkdir(fullPath, { recursive: true, mode: 0o775 });
 
             // Tạo .vscode folder
             const vscodePath = path.join(fullPath, '.vscode');
-            await fs.mkdir(vscodePath, { recursive: true });
+            await fs.mkdir(vscodePath, { recursive: true, mode: 0o775 });
 
             // Tạo tasks.json
             await this.createVSCodeTasks(vscodePath);
@@ -124,20 +124,21 @@ class WorkspaceManager {
             const readmeExists = await this.fileExists(readmePath);
 
             if (!readmeExists) {
-                await fs.writeFile(readmePath, this.getReadmeTemplate(problemCode));
+                await fs.writeFile(readmePath, this.getReadmeTemplate(problemCode), { mode: 0o664 });
             }
 
             // Tạo file input.txt mẫu
             const inputPath = path.join(fullPath, 'input.txt');
             const inputExists = await this.fileExists(inputPath);
             if (!inputExists) {
-                await fs.writeFile(inputPath, '# Nhập test case của bạn vào đây\n# Ví dụ:\n# 5 3\n');
+                await fs.writeFile(inputPath, '# Nhập test case của bạn vào đây\n# Ví dụ:\n# 5 3\n', { mode: 0o664 });
             }
 
             // Tạo file chính nếu chưa có
             await this.createMainFileIfNeeded(fullPath, problemCode);
 
             console.log(`[WorkspaceManager] Workspace structure created at ${fullPath}`);
+            console.log(`[WorkspaceManager] Note: Permissions will be automatically fixed by cron job`);
 
         } catch (error) {
             console.error('[WorkspaceManager] Error creating workspace structure:', error);
@@ -198,7 +199,7 @@ class WorkspaceManager {
             if (codeFiles.length === 0) {
                 // Chưa có file code nào - tạo template
                 const mainFilePath = path.join(workspacePath, `${problemCode}.cpp`);
-                await fs.writeFile(mainFilePath, this.getCppTemplate(problemCode));
+                await fs.writeFile(mainFilePath, this.getCppTemplate(problemCode), { mode: 0o664 });
                 console.log(`[WorkspaceManager] Created main file: ${problemCode}.cpp`);
             }
 
