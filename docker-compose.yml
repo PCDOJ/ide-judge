@@ -142,6 +142,7 @@ services:
       - "8080:8080"
     environment:
       - TZ=Asia/Ho_Chi_Minh
+      - PROXY_DOMAIN=${PROXY_DOMAIN:-localhost:2308}
     volumes:
       - workspace_data:/workspace
     networks:
