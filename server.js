@@ -116,12 +116,14 @@ const codeServerProxy = createProxyMiddleware({
         // Handle WebSocket errors differently
         if (res.socket && res.socket.writable) {
             res.socket.end();
-        } else if (!res.headersSent) {
-            res.status(500).json({
+        } else if (res.writeHead && !res.headersSent) {
+            // Only call status() if it's an HTTP response (not WebSocket)
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
                 success: false,
                 message: 'Code-Server is not available',
                 error: err.message
-            });
+            }));
         }
     },
     onProxyRes: (proxyRes, req, res) => {
