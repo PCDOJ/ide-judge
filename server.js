@@ -70,6 +70,12 @@ const codeServerProxy = createProxyMiddleware({
     },
     logLevel: 'debug', // Enable detailed logging for debugging
     onProxyReq: (proxyReq, req, res) => {
+        // Forward the original host header to code-server for origin check
+        // This is required for code-server's security origin validation
+        if (req.headers.host) {
+            proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
+        }
+
         // Log HTTP proxy requests with full details
         const queryString = req.url.includes('?') ? req.url.split('?')[1] : '';
         const targetUrl = `${codeServerUrl}${proxyReq.path}`;
@@ -79,6 +85,12 @@ const codeServerProxy = createProxyMiddleware({
         }
     },
     onProxyReqWs: (proxyReq, req, socket, options, head) => {
+        // Forward the original host header to code-server for WebSocket origin check
+        // This is critical for WebSocket connections to work through proxy
+        if (req.headers.host) {
+            proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
+        }
+
         // Log WebSocket upgrade requests with full details
         const queryString = req.url.includes('?') ? req.url.split('?')[1] : '';
         const targetUrl = `${codeServerUrl}${req.url.replace(/^\/code-server/, '')}`;

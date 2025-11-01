@@ -10,17 +10,22 @@ sudo chmod -R 755 /workspace 2>/dev/null || true
 echo "[Code-Server Entrypoint] Workspace structure:"
 ls -la /workspace/ 2>/dev/null || echo "Workspace is empty"
 
+# Get proxy domain from environment variable or use default
+PROXY_DOMAIN="${PROXY_DOMAIN:-localhost:2308}"
+
 # Start code-server with verbose logging
 echo "[Code-Server Entrypoint] Starting code-server on 0.0.0.0:8080..."
 echo "[Code-Server Entrypoint] Auth: none"
-echo "[Code-Server Entrypoint] Proxy domain: localhost:2308"
+echo "[Code-Server Entrypoint] Proxy domain: ${PROXY_DOMAIN}"
 echo "[Code-Server Entrypoint] Note: Specific folders can be opened via ?folder= query parameter"
 
 # Start code-server with proxy domain configuration to allow requests from proxy
 # --proxy-domain allows code-server to accept requests from the specified domain
+# Use wildcard pattern to accept any subdomain/port on the same domain
 exec code-server \
     --bind-addr "0.0.0.0:8080" \
     --auth "none" \
-    --proxy-domain "localhost:2308" \
+    --proxy-domain "${PROXY_DOMAIN}" \
+    --proxy-domain "*.${PROXY_DOMAIN#*.}" \
     --verbose
 
