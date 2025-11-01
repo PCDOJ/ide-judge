@@ -21,11 +21,11 @@ echo "[Code-Server Entrypoint] Note: Specific folders can be opened via ?folder=
 
 # Start code-server with proxy domain configuration to allow requests from proxy
 # --proxy-domain allows code-server to accept requests from the specified domain
-# Use wildcard pattern to accept any subdomain/port on the same domain
+# Accept both the exact domain and without port for flexibility
 exec code-server \
     --bind-addr "0.0.0.0:8080" \
     --auth "none" \
     --proxy-domain "${PROXY_DOMAIN}" \
-    --proxy-domain "*.${PROXY_DOMAIN#*.}" \
+    --proxy-domain "${PROXY_DOMAIN%:*}" \
     --verbose
 
