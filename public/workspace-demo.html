@@ -219,9 +219,10 @@
 
                 console.log('Workspace initialized:', session);
 
-                // Load code-server iframe directly from port 8080 to avoid proxy origin issues
+                // Load code-server iframe through proxy to work on deployed server
                 const folderPath = `/workspace/${session.workspacePath}`;
-                const codeServerUrl = `http://localhost:8080/?folder=${encodeURIComponent(folderPath)}`;
+                // Use relative URL with proxy path instead of hard-coded localhost
+                const codeServerUrl = `/code-server/?folder=${encodeURIComponent(folderPath)}`;
 
                 console.log('[Workspace] Loading code-server iframe:', {
                     folderPath: folderPath,
