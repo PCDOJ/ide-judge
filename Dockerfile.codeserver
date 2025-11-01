@@ -66,6 +66,13 @@ RUN chmod +x /usr/local/bin/restricted-shell.sh
 COPY restricted-bash-wrapper.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/restricted-bash-wrapper.sh
 
+# Copy workspace permissions fix scripts
+COPY fix-workspace-permissions-cron.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/fix-workspace-permissions-cron.sh
+
+COPY workspace-permissions-daemon.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/workspace-permissions-daemon.sh
+
 # Copy VSCode settings (includes terminal profile configuration)
 COPY code-server-settings.json /home/coder/.local/share/code-server/User/settings.json
 RUN chown coder:coder /home/coder/.local/share/code-server/User/settings.json
