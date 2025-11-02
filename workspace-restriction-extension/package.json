@@ -1,0 +1,17 @@
+{
+  "name": "workspace-restriction",
+  "displayName": "Workspace Restriction",
+  "description": "Prevents opening folders outside the current workspace",
+  "version": "1.0.0",
+  "publisher": "ide-judge",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.56.0"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {}
+}
+
