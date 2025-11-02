@@ -56,6 +56,29 @@ function activate(context) {
     });
     context.subscriptions.push(terminalNewDisposable);
 
+    // Chặn việc tạo terminal với profile cụ thể
+    const terminalNewWithProfileDisposable = vscode.commands.registerCommand('workbench.action.terminal.newWithProfile', async (args) => {
+        // Chỉ cho phép restricted-bash profile
+        if (args && args.profileName && args.profileName !== 'restricted-bash') {
+            vscode.window.showErrorMessage(
+                `🔒 Restricted Mode: Cannot use terminal profile "${args.profileName}". Only "restricted-bash" is allowed.`,
+                { modal: true }
+            );
+            console.log(`[Workspace Restriction] Blocked terminal profile: ${args.profileName}`);
+            return;
+        }
+
+        // Tạo terminal với restricted profile
+        const terminal = vscode.window.createTerminal({
+            name: 'Restricted Terminal',
+            shellPath: '/usr/local/bin/restricted-bash-wrapper.sh',
+            iconPath: new vscode.ThemeIcon('shield')
+        });
+        terminal.show();
+        console.log('[Workspace Restriction] Created restricted terminal (via newWithProfile)');
+    });
+    context.subscriptions.push(terminalNewWithProfileDisposable);
+
     // Monitor file opening để chặn mở file ngoài workspace
     const fileOpenDisposable = vscode.workspace.onDidOpenTextDocument(document => {
         // Bỏ qua các document đặc biệt (untitled, output, etc.)
