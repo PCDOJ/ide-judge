@@ -55,6 +55,32 @@
     "window.openFilesInNewWindow": "off",
     "files.simpleDialog.enable": true,
     "explorer.confirmDelete": false,
-    "explorer.confirmDragAndDrop": false
+    "explorer.confirmDragAndDrop": false,
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/**": true,
+        "**/.hg/store/**": true,
+        "**/__pycache__/**": true,
+        "**/target/**": true,
+        "**/build/**": true,
+        "**/dist/**": true,
+        "**/.cache/**": true,
+        "**/tmp/**": true,
+        "**/temp/**": true
+    },
+    "search.followSymlinks": false,
+    "search.useIgnoreFiles": true,
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true,
+        "**/__pycache__": true,
+        "**/*.pyc": true,
+        "**/node_modules": true
+    }
 }
 
