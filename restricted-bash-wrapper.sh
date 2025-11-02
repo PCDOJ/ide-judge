@@ -33,6 +33,9 @@ fi
 export ALLOWED_DIR
 export INITIAL_DIR
 
+# Set restricted mode flag to prevent opening new shells
+export RESTRICTED_MODE=1
+
 # Function to check if path is within allowed directory
 is_path_allowed() {
     local target_path="$1"
@@ -176,8 +179,51 @@ chgrp() {
     return 1
 }
 
+# Override bash command to prevent opening new shells
+bash() {
+    echo "❌ Error: Opening new bash shell is not allowed" >&2
+    echo "You are already in a restricted shell environment" >&2
+    return 1
+}
+
+# Override zsh command to prevent opening new shells
+zsh() {
+    echo "❌ Error: Opening zsh shell is not allowed" >&2
+    echo "You are already in a restricted shell environment" >&2
+    return 1
+}
+
+# Override sh command to prevent opening new shells
+sh() {
+    echo "❌ Error: Opening sh shell is not allowed" >&2
+    echo "You are already in a restricted shell environment" >&2
+    return 1
+}
+
+# Override exec to prevent shell escape (but allow it from this script)
+exec() {
+    # Get the caller information
+    local caller_script="${BASH_SOURCE[1]}"
+
+    # If called from this wrapper script itself, allow it
+    if [[ "$caller_script" == *"restricted-bash-wrapper.sh" ]]; then
+        builtin exec "$@"
+        return $?
+    fi
+
+    # Check if trying to execute a shell
+    if [[ "$1" =~ ^(bash|zsh|sh|/bin/bash|/bin/zsh|/bin/sh|/usr/bin/bash|/usr/bin/zsh)$ ]]; then
+        echo "❌ Error: Executing new shell via exec is not allowed" >&2
+        echo "You are already in a restricted shell environment" >&2
+        return 1
+    fi
+
+    # Allow other exec commands
+    builtin exec "$@"
+}
+
 # Export functions so they work in subshells
-export -f cd pushd popd sudo su chmod chown chgrp is_path_allowed
+export -f cd pushd popd sudo su chmod chown chgrp is_path_allowed bash zsh sh exec
 
 # Set prompt to show restricted mode
 export PS1="\[\033[01;31m\][RESTRICTED]\[\033[00m\] \[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
