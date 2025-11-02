@@ -19,13 +19,21 @@
             "path": "/usr/local/bin/restricted-bash-wrapper.sh",
             "args": [],
             "icon": "shield"
-        }
+        },
+        "bash": null,
+        "zsh": null,
+        "sh": null,
+        "dash": null,
+        "rbash": null
     },
     "terminal.integrated.allowedProfiles": {
         "linux": ["restricted-bash"]
     },
     "terminal.integrated.automationProfile.linux": {
         "path": "/usr/local/bin/restricted-bash-wrapper.sh"
+    },
+    "terminal.integrated.hideProfiles": {
+        "linux": ["bash", "zsh", "sh", "dash", "rbash"]
     },
     "terminal.integrated.inheritEnv": true,
     "terminal.integrated.enablePersistentSessions": false,
