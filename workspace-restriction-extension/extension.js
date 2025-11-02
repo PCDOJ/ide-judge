@@ -2,8 +2,8 @@
 const vscode = require('vscode');
 
 /**
- * VSCode Extension để chặn việc mở folder khác ngoài workspace hiện tại
- * Ngăn chặn các command: workbench.action.files.openFolder, workbench.action.files.openFileFolder
+ * VSCode Extension để chặn việc mở folder/file khác ngoài workspace hiện tại
+ * Ngăn chặn các command: openFolder, openFile, addRootFolder, etc.
  */
 
 function activate(context) {
@@ -18,7 +18,14 @@ function activate(context) {
         'workbench.action.files.openFileFolderInNewWindow',
         'workbench.action.files.openFolderInNewWindow',
         'vscode.openFolder',
-        
+
+        // File opening commands (File menu > Open File)
+        'workbench.action.files.openFile',
+        'workbench.action.files.openFileInNewWindow',
+        'workbench.action.files.openLocalFile',
+        'workbench.action.files.openLocalFileFolder',
+        'vscode.open',
+
         // Terminal profile selection commands
         'workbench.action.terminal.selectDefaultProfile'
     ];
@@ -27,7 +34,7 @@ function activate(context) {
     restrictedCommands.forEach(commandId => {
         const disposable = vscode.commands.registerCommand(commandId, () => {
             vscode.window.showErrorMessage(
-                '🔒 Restricted Mode: Opening other folders is not allowed. You can only work within the current workspace.',
+                '🔒 Restricted Mode: Opening folders/files outside workspace is not allowed. You can only work within the current workspace.',
                 { modal: true }
             );
             console.log(`[Workspace Restriction] Blocked command: ${commandId}`);
@@ -48,6 +55,38 @@ function activate(context) {
         console.log('[Workspace Restriction] Created new restricted terminal');
     });
     context.subscriptions.push(terminalNewDisposable);
+
+    // Monitor file opening để chặn mở file ngoài workspace
+    const fileOpenDisposable = vscode.workspace.onDidOpenTextDocument(document => {
+        // Bỏ qua các document đặc biệt (untitled, output, etc.)
+        if (document.uri.scheme !== 'file') {
+            return;
+        }
+
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+            return;
+        }
+
+        // Kiểm tra xem file có nằm trong workspace không
+        const filePath = document.uri.fsPath;
+        const isInWorkspace = workspaceFolders.some(folder => {
+            const workspacePath = folder.uri.fsPath;
+            return filePath.startsWith(workspacePath);
+        });
+
+        if (!isInWorkspace) {
+            vscode.window.showErrorMessage(
+                `🔒 Restricted Mode: Cannot open file outside workspace.\nFile: ${filePath}`,
+                { modal: true }
+            );
+            console.log(`[Workspace Restriction] Blocked opening file outside workspace: ${filePath}`);
+
+            // Đóng document
+            vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+        }
+    });
+    context.subscriptions.push(fileOpenDisposable);
 
     // Chặn việc thay đổi workspace folders
     const workspaceFoldersChangeDisposable = vscode.workspace.onDidChangeWorkspaceFolders(event => {
