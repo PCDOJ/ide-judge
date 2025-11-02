@@ -83,6 +83,10 @@ WORKDIR /workspace
 # Switch back to coder user
 USER coder
 
+# Copy workspace restriction extension (no build needed - pure JavaScript)
+RUN mkdir -p /home/coder/.local/share/code-server/extensions/workspace-restriction
+COPY workspace-restriction-extension /home/coder/.local/share/code-server/extensions/workspace-restriction/
+
 # Install VSCode extensions from Open VSX Registry
 # Code Runner: Run code with shortcuts
 RUN code-server --install-extension formulahendry.code-runner
