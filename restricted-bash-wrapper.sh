@@ -225,6 +225,10 @@ exec() {
 # Export functions so they work in subshells
 export -f cd pushd popd sudo su chmod chown chgrp is_path_allowed bash zsh sh exec
 
+# Set umask to ensure new files have correct permissions
+# umask 002 = directories: 775, files: 664
+umask 002
+
 # Set prompt to show restricted mode
 export PS1="\[\033[01;31m\][RESTRICTED]\[\033[00m\] \[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
 
