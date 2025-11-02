@@ -5,14 +5,14 @@ echo "========================================="
 echo "  Code-Server Entrypoint"
 echo "========================================="
 
-# Start workspace permissions daemon in background
-# This daemon will continuously fix permissions every 1 second
-echo "[Code-Server Entrypoint] Starting workspace permissions daemon..."
-sudo /usr/local/bin/workspace-permissions-daemon.sh &
-DAEMON_PID=$!
-echo "[Code-Server Entrypoint] Permissions daemon started with PID: $DAEMON_PID"
+# Set umask to ensure new files/directories have correct permissions
+# umask 002 means:
+# - New directories: 775 (rwxrwxr-x)
+# - New files: 664 (rw-rw-r--)
+echo "[Code-Server Entrypoint] Setting umask to 002 for automatic permissions..."
+umask 002
 
-# Initial fix permissions for workspace directory
+# Initial fix permissions for workspace directory (one-time only)
 echo "[Code-Server Entrypoint] Initial workspace permissions fix..."
 
 # Set ownership to coder user
@@ -33,7 +33,15 @@ echo "[Code-Server Entrypoint] Making shell scripts executable..."
 sudo find /workspace -type f -name "*.sh" -exec chmod 775 {} \; 2>/dev/null || true
 
 echo "[Code-Server Entrypoint] ✅ Initial permissions fixed!"
-echo "[Code-Server Entrypoint] ✅ Daemon will continue fixing permissions every 1 second"
+echo "[Code-Server Entrypoint] ✅ New files will automatically have correct permissions (umask 002)"
+
+# OPTIONAL: Start inotify-based permission watcher (only if needed)
+# This is much more efficient than the old daemon (only runs when files are created)
+# Uncomment the following lines if you need automatic permission fixing:
+# echo "[Code-Server Entrypoint] Starting inotify permission watcher..."
+# sudo /usr/local/bin/workspace-permissions-inotify.sh &
+# WATCHER_PID=$!
+# echo "[Code-Server Entrypoint] Permission watcher started with PID: $WATCHER_PID"
 
 # List workspace structure for debugging
 echo "[Code-Server Entrypoint] Workspace structure:"

@@ -24,6 +24,8 @@ RUN apt-get update && apt-get install -y \
     cargo \
     # Git
     git \
+    # inotify-tools for efficient file watching
+    inotify-tools \
     # Other utilities
     curl \
     wget \
@@ -72,6 +74,10 @@ RUN chmod +x /usr/local/bin/fix-workspace-permissions-cron.sh
 
 COPY workspace-permissions-daemon.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/workspace-permissions-daemon.sh
+
+# Copy inotify-based permission watcher (efficient alternative)
+COPY workspace-permissions-inotify.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/workspace-permissions-inotify.sh
 
 # Copy VSCode settings (includes terminal profile configuration)
 COPY code-server-settings.json /home/coder/.local/share/code-server/User/settings.json
