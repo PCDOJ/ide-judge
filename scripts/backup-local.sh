@@ -86,25 +86,37 @@ print_info "Container: ${MARIADB_CONTAINER}, User: ${DB_USER}"
 
 # Use MYSQL_PWD environment variable to avoid password in command line
 DUMP_ERROR=$(mktemp)
-if docker exec -e MYSQL_PWD="${DB_PASSWORD}" "${MARIADB_CONTAINER}" mysqldump \
+DUMP_EXIT_CODE=0
+
+docker exec -e MYSQL_PWD="${DB_PASSWORD}" "${MARIADB_CONTAINER}" mysqldump \
     -u"${DB_USER}" \
     --single-transaction \
     --routines \
     --triggers \
     --events \
     --databases "${DB_NAME}" \
-    2>"${DUMP_ERROR}" \
-    > "${MARIADB_DUMP_FILE}"; then
+    > "${MARIADB_DUMP_FILE}" 2>"${DUMP_ERROR}"
 
+DUMP_EXIT_CODE=$?
+
+if [ $DUMP_EXIT_CODE -eq 0 ]; then
     MARIADB_SIZE=$(du -h "${MARIADB_DUMP_FILE}" | cut -f1)
     print_success "Backup MariaDB thành công! (${MARIADB_SIZE})"
     rm -f "${DUMP_ERROR}"
 else
-    print_error "Backup MariaDB thất bại!"
+    print_error "Backup MariaDB thất bại! (Exit code: ${DUMP_EXIT_CODE})"
+    echo ""
+    print_error "=== CHI TIẾT LỖI ==="
     if [ -s "${DUMP_ERROR}" ]; then
-        print_error "Chi tiết lỗi:"
         cat "${DUMP_ERROR}"
+    else
+        echo "Không có thông báo lỗi từ mysqldump"
+        echo "Kiểm tra:"
+        echo "  1. Container có đang chạy: docker ps | grep ${MARIADB_CONTAINER}"
+        echo "  2. Database credentials trong .env có đúng không"
+        echo "  3. Thử chạy thủ công: docker exec ${MARIADB_CONTAINER} mysql -u${DB_USER} -p${DB_PASSWORD} -e 'SHOW DATABASES;'"
     fi
+    echo ""
     rm -f "${DUMP_ERROR}"
     exit 1
 fi
@@ -126,23 +138,35 @@ else
     print_info "Container: ${POSTGRES_CONTAINER}, User: ${POSTGRES_USER}"
 
     PG_DUMP_ERROR=$(mktemp)
-    if docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "${POSTGRES_CONTAINER}" pg_dump \
+    PG_EXIT_CODE=0
+
+    docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "${POSTGRES_CONTAINER}" pg_dump \
         -U "${POSTGRES_USER}" \
         -d "${POSTGRES_DB}" \
         --clean \
         --if-exists \
-        2>"${PG_DUMP_ERROR}" \
-        > "${POSTGRES_DUMP_FILE}"; then
+        > "${POSTGRES_DUMP_FILE}" 2>"${PG_DUMP_ERROR}"
 
+    PG_EXIT_CODE=$?
+
+    if [ $PG_EXIT_CODE -eq 0 ]; then
         POSTGRES_SIZE=$(du -h "${POSTGRES_DUMP_FILE}" | cut -f1)
         print_success "Backup PostgreSQL thành công! (${POSTGRES_SIZE})"
         rm -f "${PG_DUMP_ERROR}"
     else
-        print_error "Backup PostgreSQL thất bại!"
+        print_error "Backup PostgreSQL thất bại! (Exit code: ${PG_EXIT_CODE})"
+        echo ""
+        print_error "=== CHI TIẾT LỖI ==="
         if [ -s "${PG_DUMP_ERROR}" ]; then
-            print_error "Chi tiết lỗi:"
             cat "${PG_DUMP_ERROR}"
+        else
+            echo "Không có thông báo lỗi từ pg_dump"
+            echo "Kiểm tra:"
+            echo "  1. Container có đang chạy: docker ps | grep ${POSTGRES_CONTAINER}"
+            echo "  2. Database credentials trong .env có đúng không"
+            echo "  3. Thử chạy thủ công: docker exec ${POSTGRES_CONTAINER} psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c '\\l'"
         fi
+        echo ""
         rm -f "${PG_DUMP_ERROR}"
         exit 1
     fi
