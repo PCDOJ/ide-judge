@@ -81,21 +81,31 @@ if ! docker ps | grep -q "${MARIADB_CONTAINER}"; then
 fi
 
 # Dump MariaDB database
-docker exec "${MARIADB_CONTAINER}" mysqldump \
+print_info "Đang dump database ${DB_NAME}..."
+print_info "Container: ${MARIADB_CONTAINER}, User: ${DB_USER}"
+
+# Use MYSQL_PWD environment variable to avoid password in command line
+DUMP_ERROR=$(mktemp)
+if docker exec -e MYSQL_PWD="${DB_PASSWORD}" "${MARIADB_CONTAINER}" mysqldump \
     -u"${DB_USER}" \
-    -p"${DB_PASSWORD}" \
     --single-transaction \
     --routines \
     --triggers \
     --events \
     --databases "${DB_NAME}" \
-    > "${MARIADB_DUMP_FILE}"
+    2>"${DUMP_ERROR}" \
+    > "${MARIADB_DUMP_FILE}"; then
 
-if [ $? -eq 0 ]; then
     MARIADB_SIZE=$(du -h "${MARIADB_DUMP_FILE}" | cut -f1)
     print_success "Backup MariaDB thành công! (${MARIADB_SIZE})"
+    rm -f "${DUMP_ERROR}"
 else
     print_error "Backup MariaDB thất bại!"
+    if [ -s "${DUMP_ERROR}" ]; then
+        print_error "Chi tiết lỗi:"
+        cat "${DUMP_ERROR}"
+    fi
+    rm -f "${DUMP_ERROR}"
     exit 1
 fi
 
@@ -112,18 +122,28 @@ if ! docker ps | grep -q "${POSTGRES_CONTAINER}"; then
     print_warning "PostgreSQL container không chạy. Bỏ qua backup PostgreSQL."
 else
     # Dump PostgreSQL database
-    docker exec "${POSTGRES_CONTAINER}" pg_dump \
+    print_info "Đang dump database ${POSTGRES_DB}..."
+    print_info "Container: ${POSTGRES_CONTAINER}, User: ${POSTGRES_USER}"
+
+    PG_DUMP_ERROR=$(mktemp)
+    if docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "${POSTGRES_CONTAINER}" pg_dump \
         -U "${POSTGRES_USER}" \
         -d "${POSTGRES_DB}" \
         --clean \
         --if-exists \
-        > "${POSTGRES_DUMP_FILE}"
+        2>"${PG_DUMP_ERROR}" \
+        > "${POSTGRES_DUMP_FILE}"; then
 
-    if [ $? -eq 0 ]; then
         POSTGRES_SIZE=$(du -h "${POSTGRES_DUMP_FILE}" | cut -f1)
         print_success "Backup PostgreSQL thành công! (${POSTGRES_SIZE})"
+        rm -f "${PG_DUMP_ERROR}"
     else
         print_error "Backup PostgreSQL thất bại!"
+        if [ -s "${PG_DUMP_ERROR}" ]; then
+            print_error "Chi tiết lỗi:"
+            cat "${PG_DUMP_ERROR}"
+        fi
+        rm -f "${PG_DUMP_ERROR}"
         exit 1
     fi
 fi
